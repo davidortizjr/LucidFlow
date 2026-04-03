@@ -1,0 +1,38 @@
+{
+    "appId": "com.lucidflow.app",
+    "productName": "LucidFlow",
+    "files": [
+        "dist/**/*",
+        "electron/**/*",
+        "node_modules/**/*",
+        "package.json",
+        "../server/src/**/*",
+        "../server/prisma/**/*",
+        "../server/package.json",
+        "../server/node_modules/**/*"
+    ],
+    "win": {
+        "target": [
+            "nsis",
+            "portable"
+        ],
+        "certificateFile": null,
+        "certificatePassword": null
+    },
+    "nsis": {
+        "oneClick": false,
+        "allowToChangeInstallationDirectory": true
+    },
+    "mac": {
+        "target": [
+            "dmg",
+            "zip"
+        ]
+    },
+    "linux": {
+        "target": [
+            "AppImage",
+            "deb"
+        ]
+    }
+}

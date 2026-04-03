@@ -1,0 +1,49 @@
+model Channel {
+  id          String    @id @default(cuid())
+  name        String
+  description String?
+  teamId      String
+  isPrivate   Boolean   @default(false)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  team        Team      @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  members     User[]
+  messages    Message[]
+
+  @@index([teamId])
+  @@index([name])
+}
+
+model Conversation {
+  id             String    @id @default(cuid())
+  participantIds Json      @default("[]") // JSON array of user IDs
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  messages       Message[]
+
+  @@index([createdAt])
+}
+
+model Message {
+  id             String         @id @default(cuid())
+  content        String
+  type           MessageType    @default(TEXT)
+  userId         String
+  channelId      String?
+  conversationId String?
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+
+  user           User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  channel        Channel?       @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  conversation   Conversation?  @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([channelId])
+  @@index([conversationId])
+  @@index([createdAt])
+  @@index([channelId, createdAt]) // Compound index for efficient message pagination by channel
+  @@index([conversationId, createdAt]) // Compound index for conversation message queries
+}

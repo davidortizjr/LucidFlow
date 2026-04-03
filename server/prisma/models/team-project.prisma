@@ -1,0 +1,37 @@
+model Team {
+  id          String    @id @default(cuid())
+  name        String
+  description String?
+  avatar      String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  members     User[]
+  projects    Project[]
+  channels    Channel[]
+
+  @@index([name])
+}
+
+model Project {
+  id          String       @id @default(cuid())
+  name        String
+  description String?
+  teamId      String
+  status      String       @default("active") // active, archived, on-hold
+  startDate   DateTime?
+  endDate     DateTime?
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  team        Team         @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  tasks       Task[]
+  boards      Board[]
+  activities  ActivityLog[]
+
+  @@index([teamId])
+  @@index([name])
+  @@index([status])
+  @@index([createdAt])
+  @@index([teamId, status]) // Compound index for filtering projects by team and status
+}

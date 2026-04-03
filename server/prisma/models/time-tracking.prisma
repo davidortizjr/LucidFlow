@@ -1,0 +1,16 @@
+model TimeRecord {
+  id           String    @id @default(cuid())
+  userId       String
+  clockInTime  DateTime
+  clockOutTime DateTime?
+  duration     Int? // Duration in minutes
+  date         DateTime  @default(now())
+  notes        String?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([date])
+}

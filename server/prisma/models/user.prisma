@@ -1,0 +1,23 @@
+model User {
+  id            String    @id @default(cuid())
+  email         String    @unique
+  name          String
+  password      String
+  avatar        String?
+  role          UserRole  @default(MEMBER)
+  status        String    @default("online") // online, offline, away
+  isActive      Boolean   @default(true)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  teams         Team[]
+  tasks         Task[]
+  assignedTasks Task[]    @relation("AssignedTo")
+  messages      Message[]
+  channels      Channel[]
+  timeRecords   TimeRecord[]
+  activityLogs  ActivityLog[]
+  documentation CodeDocumentation[]
+
+  @@index([email])
+}

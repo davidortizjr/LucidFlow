@@ -1,0 +1,466 @@
+@import url('https://fonts.googleapis.com/css2?family=Manrope:wght@200;400;500;600;700;800&family=Inter:wght@300;400;500;600&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap');
+@config "../tailwind.config.ts";
+@import "tailwindcss";
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+html,
+body {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+html::-webkit-scrollbar,
+body::-webkit-scrollbar {
+  display: none;
+}
+
+* {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+*::-webkit-scrollbar {
+  display: none;
+}
+
+body.electron main[class*="pt-16"] {
+  padding-top: calc(3rem + 48px) !important;
+}
+
+[style*="WebkitAppRegion: drag"] {
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+[style*="WebkitAppRegion: no-drag"] {
+  user-select: auto;
+  -webkit-user-select: auto;
+}
+
+:root {
+  --lf-primary: #6D28D9;
+  --lf-primary-container: #7C3AED;
+  --sidebar-width: 256px;
+
+  /* Light mode colors */
+  --bg-primary: #FFFFFF;
+  --bg-secondary: #F5F5F5;
+  --bg-tertiary: #EEEEEE;
+  --text-primary: #1F1F1F;
+  --text-secondary: #666666;
+  --text-tertiary: #999999;
+  --border-color: #DDDDDD;
+  --surface-1: #F9F9F9;
+  --surface-2: #F0F0F0;
+}
+
+/* Dark mode colors - grey/black background with white text */
+:root.dark,
+html[data-theme="dark"] {
+  --bg-primary: #121212;
+  --bg-secondary: #1E1E1E;
+  --bg-tertiary: #2A2A2A;
+  --text-primary: #FFFFFF;
+  --text-secondary: #E1E1E1;
+  --text-tertiary: #B0B0B0;
+  --border-color: #333333;
+  --surface-1: #1A1A1A;
+  --surface-2: #242424;
+
+  background-color: var(--bg-primary) !important;
+  color: var(--text-primary) !important;
+}
+
+html.compact-mode {
+  font-size: 13px;
+}
+
+html.compact-mode * {
+  --tw-space-y: 0.25rem;
+  --tw-space-x: 0.25rem;
+}
+
+html.compact-mode p,
+html.compact-mode span,
+html.compact-mode h1,
+html.compact-mode h2,
+html.compact-mode h3,
+html.compact-mode h4 {
+  line-height: 1.25;
+}
+
+html.compact-mode [class*="p-"] {
+  padding: 0.375rem !important;
+}
+
+html.compact-mode [class*="px-"] {
+  padding-left: 0.375rem !important;
+  padding-right: 0.375rem !important;
+}
+
+html.compact-mode [class*="py-"] {
+  padding-top: 0.375rem !important;
+  padding-bottom: 0.375rem !important;
+}
+
+/* Reduce motion */
+html.reduce-motion * {
+  animation-duration: 0s !important;
+  transition-duration: 0s !important;
+}
+
+/* Apply sidebar width */
+.md\:ml-64 {
+  margin-left: var(--sidebar-width);
+}
+
+/* Dark mode universal styles */
+:root.dark,
+html[data-theme="dark"] {
+  /* Override all background surfaces */
+}
+
+:root.dark body,
+html[data-theme="dark"] body {
+  background-color: var(--bg-primary);
+  color: var(--text-primary);
+}
+
+:root.dark main,
+html[data-theme="dark"] main {
+  background-color: var(--bg-primary);
+  color: var(--text-primary);
+}
+
+:root.dark .bg-background,
+html[data-theme="dark"] .bg-background {
+  background-color: var(--bg-primary) !important;
+}
+
+:root.dark .bg-surface-container-lowest,
+html[data-theme="dark"] .bg-surface-container-lowest {
+  background-color: var(--surface-1) !important;
+}
+
+:root.dark .bg-surface-container,
+html[data-theme="dark"] .bg-surface-container {
+  background-color: var(--surface-2) !important;
+}
+
+:root.dark .bg-surface-container-highest,
+html[data-theme="dark"] .bg-surface-container-highest {
+  background-color: var(--bg-tertiary) !important;
+}
+
+:root.dark .text-on-surface,
+html[data-theme="dark"] .text-on-surface {
+  color: var(--text-primary) !important;
+}
+
+:root.dark .text-on-surface-variant,
+html[data-theme="dark"] .text-on-surface-variant {
+  color: var(--text-secondary) !important;
+}
+
+:root.dark .border-,
+html[data-theme="dark"] .border- {
+  border-color: var(--border-color) !important;
+}
+
+/* Dark mode buttons */
+:root.dark button,
+html[data-theme="dark"] button {
+  color: inherit;
+}
+
+:root.dark .bg-primary,
+html[data-theme="dark"] .bg-primary {
+  background-color: var(--lf-primary) !important;
+  color: white !important;
+}
+
+/* Dark mode input */
+:root.dark input,
+:root.dark textarea,
+:root.dark select,
+html[data-theme="dark"] input,
+html[data-theme="dark"] textarea,
+html[data-theme="dark"] select {
+  background-color: var(--bg-secondary);
+  color: var(--text-primary);
+  border-color: var(--border-color);
+}
+
+:root.dark input:focus,
+:root.dark textarea:focus,
+:root.dark select:focus,
+html[data-theme="dark"] input:focus,
+html[data-theme="dark"] textarea:focus,
+html[data-theme="dark"] select:focus {
+  outline-color: var(--lf-primary);
+  border-color: var(--lf-primary);
+}
+
+/* Dark mode range slider */
+:root.dark input[type="range"],
+html[data-theme="dark"] input[type="range"] {
+  accent-color: var(--lf-primary);
+}
+
+/* Dark mode scrollbar */
+:root.dark .custom-scrollbar::-webkit-scrollbar-thumb,
+html[data-theme="dark"] .custom-scrollbar::-webkit-scrollbar-thumb {
+  background: #555555;
+}
+
+/* Ensure all text inherits proper colors in dark mode */
+:root.dark *,
+html[data-theme="dark"] * {
+  color: inherit;
+}
+
+/* Dark mode links */
+:root.dark a,
+html[data-theme="dark"] a {
+  color: var(--lf-primary);
+}
+
+/* Dark mode disabled state */
+:root.dark button:disabled,
+html[data-theme="dark"] button:disabled {
+  background-color: var(--bg-tertiary) !important;
+  color: var(--text-tertiary) !important;
+  opacity: 0.5;
+}
+
+/* Dark mode transition for all elements */
+:root.dark,
+html[data-theme="dark"] {
+  transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+* {
+  font-family: 'Inter', sans-serif;
+}
+
+.font-manrope {
+  font-family: 'Manrope', sans-serif;
+}
+
+.material-symbols-outlined {
+  font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+}
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+.no-scrollbar {
+  scrollbar-width: none;
+}
+
+.custom-scrollbar::-webkit-scrollbar {
+  width: 4px;
+  height: 4px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: #c5c5d4;
+  border-radius: 10px;
+}
+
+.counter {
+  font-size: 16px;
+  padding: 5px 10px;
+  border-radius: 5px;
+  color: var(--accent);
+  background: var(--accent-bg);
+  border: 2px solid transparent;
+  transition: border-color 0.3s;
+  margin-bottom: 24px;
+
+  &:hover {
+    border-color: var(--accent-border);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+}
+
+.hero {
+  position: relative;
+
+  .base,
+  .framework,
+  .vite {
+    inset-inline: 0;
+    margin: 0 auto;
+  }
+
+  .base {
+    width: 170px;
+    position: relative;
+    z-index: 0;
+  }
+
+  .framework,
+  .vite {
+    position: absolute;
+  }
+
+  .framework {
+    z-index: 1;
+    top: 34px;
+    height: 28px;
+    transform: perspective(2000px) rotateZ(300deg) rotateX(44deg) rotateY(39deg) scale(1.4);
+  }
+
+  .vite {
+    z-index: 0;
+    top: 107px;
+    height: 26px;
+    width: auto;
+    transform: perspective(2000px) rotateZ(300deg) rotateX(40deg) rotateY(39deg) scale(0.8);
+  }
+}
+
+#center {
+  display: flex;
+  flex-direction: column;
+  gap: 25px;
+  place-content: center;
+  place-items: center;
+  flex-grow: 1;
+
+  @media (max-width: 1024px) {
+    padding: 32px 20px 24px;
+    gap: 18px;
+  }
+}
+
+#next-steps {
+  display: flex;
+  border-top: 1px solid var(--border);
+  text-align: left;
+
+  &>div {
+    flex: 1 1 0;
+    padding: 32px;
+
+    @media (max-width: 1024px) {
+      padding: 24px 20px;
+    }
+  }
+
+  .icon {
+    margin-bottom: 16px;
+    width: 22px;
+    height: 22px;
+  }
+
+  @media (max-width: 1024px) {
+    flex-direction: column;
+    text-align: center;
+  }
+}
+
+#docs {
+  border-right: 1px solid var(--border);
+
+  @media (max-width: 1024px) {
+    border-right: none;
+    border-bottom: 1px solid var(--border);
+  }
+}
+
+#next-steps ul {
+  list-style: none;
+  padding: 0;
+  display: flex;
+  gap: 8px;
+  margin: 32px 0 0;
+
+  .logo {
+    height: 18px;
+  }
+
+  a {
+    color: var(--text-h);
+    font-size: 16px;
+    border-radius: 6px;
+    background: var(--social-bg);
+    display: flex;
+    padding: 6px 12px;
+    align-items: center;
+    gap: 8px;
+    text-decoration: none;
+    transition: box-shadow 0.3s;
+
+    &:hover {
+      box-shadow: var(--shadow);
+    }
+
+    .button-icon {
+      height: 18px;
+      width: 18px;
+    }
+  }
+
+  @media (max-width: 1024px) {
+    margin-top: 20px;
+    flex-wrap: wrap;
+    justify-content: center;
+
+    li {
+      flex: 1 1 calc(50% - 8px);
+    }
+
+    a {
+      width: 100%;
+      justify-content: center;
+      box-sizing: border-box;
+    }
+  }
+}
+
+#spacer {
+  height: 88px;
+  border-top: 1px solid var(--border);
+
+  @media (max-width: 1024px) {
+    height: 48px;
+  }
+}
+
+.ticks {
+  position: relative;
+  width: 100%;
+
+  &::before,
+  &::after {
+    content: '';
+    position: absolute;
+    top: -4.5px;
+    border: 5px solid transparent;
+  }
+
+  &::before {
+    left: 0;
+    border-left-color: var(--border);
+  }
+
+  &::after {
+    right: 0;
+    border-right-color: var(--border);
+  }
+}
