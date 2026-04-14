@@ -5,6 +5,7 @@ import { BaseModal } from "../Modals";
 import { FormInput, FormTextarea } from "../Forms";
 import { ErrorState } from "../States";
 import type { User } from "../../types/messages";
+import { buildApiUrl } from "../../config/runtimeEndpoints";
 
 interface CreateEventModalProps {
     isOpen: boolean;
@@ -54,7 +55,8 @@ export default function CreateEventModal({
         setLoading(true);
 
         try {
-            const response = await fetch("http://localhost:3000/api/calendar-events", {
+            const eventsUrl = await buildApiUrl('/calendar-events');
+            const response = await fetch(eventsUrl, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
@@ -68,7 +70,8 @@ export default function CreateEventModal({
             });
 
             if (!response.ok) {
-                throw new Error("Failed to create event");
+                const errorBody = await response.json().catch(() => null);
+                throw new Error(errorBody?.error || errorBody?.message || "Failed to create event");
             }
 
             resetForm();

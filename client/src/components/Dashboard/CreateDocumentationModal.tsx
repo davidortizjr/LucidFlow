@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { BaseModal } from "../Modals";
 import { FormInput, FormSelect, FormTextarea } from "../Forms";
 import { ErrorState } from "../States";
+import { buildApiUrl } from "../../config/runtimeEndpoints";
 
 interface CreateDocumentationModalProps {
     isOpen: boolean;
@@ -45,7 +46,8 @@ export default function CreateDocumentationModal({
         setLoading(true);
 
         try {
-            const response = await fetch("http://localhost:3000/api/documentation", {
+            const docsUrl = await buildApiUrl('/documentation');
+            const response = await fetch(docsUrl, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
@@ -57,7 +59,8 @@ export default function CreateDocumentationModal({
             });
 
             if (!response.ok) {
-                throw new Error("Failed to create documentation");
+                const errorBody = await response.json().catch(() => null);
+                throw new Error(errorBody?.error || errorBody?.message || "Failed to create documentation");
             }
 
             resetForm();

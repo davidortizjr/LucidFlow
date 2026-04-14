@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { API_ENDPOINTS } from '../config/api';
+import { buildApiUrl } from '../config/runtimeEndpoints';
 import { useAuth } from '../contexts/AuthContext';
 import type { LoginFormData } from '../types';
 
@@ -22,7 +22,8 @@ export default function LoginPage() {
         setError('');
 
         try {
-            const response = await fetch(API_ENDPOINTS.LOGIN, {
+            const loginUrl = await buildApiUrl('/auth/login');
+            const response = await fetch(loginUrl, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(credentials),
@@ -34,7 +35,8 @@ export default function LoginPage() {
                 throw new Error(data.error || 'Login failed');
             }
 
-            const { user, token } = data;
+            const payload = data?.data ?? data;
+            const { user, token } = payload;
 
             login(user, token);
 

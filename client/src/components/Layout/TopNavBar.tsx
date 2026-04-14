@@ -1,84 +1,69 @@
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
-import { useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
+import { buildApiUrl } from '../../config/runtimeEndpoints';
 
 interface Notification {
     id: string;
-    type: 'message' | 'mention' | 'event' | 'ticket';
+    type: 'MESSAGE' | 'ACTIVITY';
     title: string;
     description: string;
-    timestamp: Date;
-    read: boolean;
-    avatar?: string;
+    createdAt: string;
+    isRead: boolean;
+    metadata?: Record<string, unknown> | null;
 }
 
 export default function TopNavBar() {
-    const { user, logout } = useAuth();
+    const { user, token, logout } = useAuth();
     const navigate = useNavigate();
     const [showUserMenu, setShowUserMenu] = useState(false);
     const [showNotifications, setShowNotifications] = useState(false);
+    const [showSettings, setShowSettings] = useState(false);
+    const [notifications, setNotifications] = useState<Notification[]>([]);
+    const [unreadCount, setUnreadCount] = useState(0);
 
-    // Sample notifications data
-    const [notifications, setNotifications] = useState<Notification[]>([
-        {
-            id: '1',
-            type: 'message',
-            title: 'Sarah Johnson',
-            description: 'Hey, did you get the latest project files?',
-            timestamp: new Date(Date.now() - 5 * 60000),
-            read: false,
-            avatar: 'https://lh3.googleusercontent.com/aida-public/AB6AXuAPxbIJdJg_ogrbR6ZBk6QlBbaE91rHVpSfytGLtWKdu5IqDhMv5hn4opb5c1Y'
-        },
-        {
-            id: '2',
-            type: 'mention',
-            title: 'Mentioned in #design',
-            description: '@you check out the new design system components',
-            timestamp: new Date(Date.now() - 15 * 60000),
-            read: false,
-            avatar: 'https://lh3.googleusercontent.com/aida-public/AB6AXuAshIyC8D'
-        },
-        {
-            id: '3',
-            type: 'event',
-            title: 'Added to Team Standup',
-            description: 'You were added as an attendee to the meeting',
-            timestamp: new Date(Date.now() - 30 * 60000),
-            read: false,
-            avatar: 'https://lh3.googleusercontent.com/aida-public/AB6AXuAshIyC8D'
-        },
-        {
-            id: '4',
-            type: 'ticket',
-            title: 'Assigned to TICKET-234',
-            description: 'Fix navigation menu responsiveness on mobile',
-            timestamp: new Date(Date.now() - 2 * 3600000),
-            read: true,
-            avatar: 'https://lh3.googleusercontent.com/aida-public/AB6AXuAPxbIJdJg_ogrbR6ZBk6QlBbaE91rHVpSfytGLtWKdu5IqDhMv5hn4opb5c1Y'
-        },
-        {
-            id: '5',
-            type: 'message',
-            title: 'Mike Chen',
-            description: 'Looking good! Ready for the demo tomorrow',
-            timestamp: new Date(Date.now() - 3 * 3600000),
-            read: true,
-            avatar: 'https://lh3.googleusercontent.com/aida-public/AB6AXuAPxbIJdJg_ogrbR6ZBk6QlBbaE91rHVpSfytGLtWKdu5IqDhMv5hn4opb5c1Y'
+    const fetchNotifications = useCallback(async () => {
+        if (!user || !token) {
+            return;
         }
-    ]);
 
-    const unreadCount = notifications.filter(n => !n.read).length;
+        try {
+            const url = await buildApiUrl('/notifications?includeRead=false&limit=20');
+            const response = await fetch(url, {
+                headers: {
+                    Authorization: `Bearer ${token}`
+                }
+            });
+
+            if (!response.ok) {
+                return;
+            }
+
+            const payload = await response.json();
+            const data = Array.isArray(payload?.data) ? payload.data : [];
+            const unread = Number(payload?.meta?.unreadCount ?? payload?.unreadCount ?? 0);
+            setNotifications(data);
+            setUnreadCount(unread);
+        } catch {
+            // Ignore notification fetch errors to avoid breaking nav rendering.
+        }
+    }, [user, token]);
+
+    useEffect(() => {
+        void fetchNotifications();
+        const intervalId = window.setInterval(() => {
+            void fetchNotifications();
+        }, 10000);
+
+        return () => window.clearInterval(intervalId);
+    }, [fetchNotifications]);
 
     const getNotificationIcon = (type: string) => {
         switch (type) {
-            case 'message':
+            case 'MESSAGE':
                 return 'mail';
-            case 'mention':
-                return 'at';
-            case 'event':
+            case 'ACTIVITY':
                 return 'event';
-            case 'ticket':
-                return 'assignment';
             default:
                 return 'notifications';
         }
@@ -86,20 +71,17 @@ export default function TopNavBar() {
 
     const getNotificationColor = (type: string) => {
         switch (type) {
-            case 'message':
+            case 'MESSAGE':
                 return 'text-blue-500 bg-blue-500/10';
-            case 'mention':
-                return 'text-purple-500 bg-purple-500/10';
-            case 'event':
+            case 'ACTIVITY':
                 return 'text-green-500 bg-green-500/10';
-            case 'ticket':
-                return 'text-orange-500 bg-orange-500/10';
             default:
                 return 'text-primary bg-primary/10';
         }
     };
 
-    const formatTime = (date: Date) => {
+    const formatTime = (dateValue: string) => {
+        const date = new Date(dateValue);
         const now = new Date();
         const diffMs = now.getTime() - date.getTime();
         const diffMins = Math.floor(diffMs / 60000);
@@ -112,8 +94,42 @@ export default function TopNavBar() {
         return `${diffDays}d ago`;
     };
 
-    const markAsRead = (id: string) => {
-        setNotifications(notifications.map(n => n.id === id ? { ...n, read: true } : n));
+    const markAsRead = async (id: string) => {
+        if (!token) {
+            return;
+        }
+
+        try {
+            const url = await buildApiUrl(`/notifications/${id}/read`);
+            await fetch(url, {
+                method: 'PATCH',
+                headers: {
+                    Authorization: `Bearer ${token}`
+                }
+            });
+        } finally {
+            setNotifications((previous) => previous.filter((notification) => notification.id !== id));
+            setUnreadCount((previous) => Math.max(0, previous - 1));
+        }
+    };
+
+    const markAllAsRead = async () => {
+        if (!token) {
+            return;
+        }
+
+        try {
+            const url = await buildApiUrl('/notifications/read-all');
+            await fetch(url, {
+                method: 'PATCH',
+                headers: {
+                    Authorization: `Bearer ${token}`
+                }
+            });
+        } finally {
+            setNotifications([]);
+            setUnreadCount(0);
+        }
     };
 
     const handleLogout = () => {
@@ -145,7 +161,11 @@ export default function TopNavBar() {
                 {/* Notifications Button */}
                 <div className="relative">
                     <button
-                        onClick={() => setShowNotifications(!showNotifications)}
+                        onClick={() => {
+                            setShowNotifications(!showNotifications);
+                            setShowSettings(false);
+                            setShowUserMenu(false);
+                        }}
                         className="p-2 text-on-surface-variant dark:text-gray-400 hover:bg-surface-container-highest dark:hover:bg-surface-container-highest rounded-full transition-colors active:scale-95 relative"
                     >
                         <span className="material-symbols-outlined">notifications</span>
@@ -163,6 +183,14 @@ export default function TopNavBar() {
                             <div className="p-4 border-b border-surface-container-highest dark:border-gray-700 bg-surface-container-lowest dark:bg-surface-container-lowest">
                                 <h3 className="font-bold text-on-surface dark:text-white">Notifications</h3>
                                 <p className="text-xs text-on-surface-variant dark:text-gray-400">{unreadCount} unread</p>
+                                {unreadCount > 0 && (
+                                    <button
+                                        onClick={() => void markAllAsRead()}
+                                        className="mt-2 text-xs font-semibold text-primary hover:underline"
+                                    >
+                                        Mark all as read
+                                    </button>
+                                )}
                             </div>
 
                             {/* Notifications List */}
@@ -176,8 +204,8 @@ export default function TopNavBar() {
                                     notifications.map(notification => (
                                         <button
                                             key={notification.id}
-                                            onClick={() => markAsRead(notification.id)}
-                                            className={`w-full px-4 py-3 border-b border-surface-container-highest dark:border-gray-700 hover:bg-surface-container-highest dark:hover:bg-gray-800 transition-colors text-left flex gap-3 ${!notification.read ? 'bg-primary/5 dark:bg-primary/5' : ''
+                                            onClick={() => void markAsRead(notification.id)}
+                                            className={`w-full px-4 py-3 border-b border-surface-container-highest dark:border-gray-700 hover:bg-surface-container-highest dark:hover:bg-gray-800 transition-colors text-left flex gap-3 ${!notification.isRead ? 'bg-primary/5 dark:bg-primary/5' : ''
                                                 }`}
                                         >
                                             {/* Icon */}
@@ -188,11 +216,11 @@ export default function TopNavBar() {
                                             {/* Content */}
                                             <div className="flex-1 min-w-0">
                                                 <div className="flex items-start justify-between gap-2">
-                                                    <h4 className={`text-sm font-semibold text-on-surface dark:text-white truncate ${!notification.read ? 'font-bold' : ''
+                                                    <h4 className={`text-sm font-semibold text-on-surface dark:text-white truncate ${!notification.isRead ? 'font-bold' : ''
                                                         }`}>
                                                         {notification.title}
                                                     </h4>
-                                                    {!notification.read && (
+                                                    {!notification.isRead && (
                                                         <div className="w-2 h-2 bg-primary rounded-full flex-shrink-0 mt-1"></div>
                                                     )}
                                                 </div>
@@ -200,32 +228,87 @@ export default function TopNavBar() {
                                                     {notification.description}
                                                 </p>
                                                 <p className="text-xs text-on-surface-variant dark:text-gray-500 mt-1.5">
-                                                    {formatTime(notification.timestamp)}
+                                                    {formatTime(notification.createdAt)}
                                                 </p>
                                             </div>
                                         </button>
                                     ))
                                 )}
                             </div>
-
-                            {/* Footer */}
-                            {notifications.length > 0 && (
-                                <button className="w-full p-3 text-center text-primary dark:text-blue-400 hover:bg-surface-container-highest dark:hover:bg-gray-800 text-sm font-semibold transition-colors border-t border-surface-container-highest dark:border-gray-700">
-                                    View All Notifications
-                                </button>
-                            )}
                         </div>
                     )}
                 </div>
 
-                <button className="p-2 text-on-surface-variant dark:text-gray-400 hover:bg-surface-container-highest dark:hover:bg-surface-container-highest rounded-full transition-colors active:scale-95">
-                    <span className="material-symbols-outlined">settings</span>
-                </button>
+                {/* Settings Menu */}
+                <div className="relative">
+                    <button
+                        onClick={() => {
+                            setShowSettings(!showSettings);
+                            setShowNotifications(false);
+                            setShowUserMenu(false);
+                        }}
+                        aria-label="Open settings menu"
+                        title="Settings"
+                        className="p-2 text-on-surface-variant dark:text-gray-400 hover:bg-surface-container-highest dark:hover:bg-surface-container-highest rounded-full transition-colors active:scale-95"
+                    >
+                        <span className="material-symbols-outlined">settings</span>
+                    </button>
+
+                    {/* Settings Dropdown */}
+                    {showSettings && (
+                        <div className="absolute right-0 mt-2 w-48 bg-surface-container dark:bg-surface-container rounded-lg shadow-lg overflow-hidden border border-surface-container-highest dark:border-gray-700">
+                            <button
+                                onClick={() => {
+                                    setShowSettings(false);
+                                    navigate('/settings?section=notifications');
+                                }}
+                                className="w-full text-left px-4 py-2 hover:bg-surface-container-highest dark:hover:bg-gray-800 text-on-surface dark:text-white transition-colors flex items-center gap-2"
+                            >
+                                <span className="material-symbols-outlined text-lg">notifications</span>
+                                Notifications
+                            </button>
+                            <button
+                                onClick={() => {
+                                    setShowSettings(false);
+                                    navigate('/settings?section=privacy');
+                                }}
+                                className="w-full text-left px-4 py-2 hover:bg-surface-container-highest dark:hover:bg-gray-800 text-on-surface dark:text-white transition-colors flex items-center gap-2"
+                            >
+                                <span className="material-symbols-outlined text-lg">privacy_tip</span>
+                                Privacy
+                            </button>
+                            <button
+                                onClick={() => {
+                                    setShowSettings(false);
+                                    navigate('/settings?section=account');
+                                }}
+                                className="w-full text-left px-4 py-2 hover:bg-surface-container-highest dark:hover:bg-gray-800 text-on-surface dark:text-white transition-colors flex items-center gap-2"
+                            >
+                                <span className="material-symbols-outlined text-lg">person</span>
+                                Account
+                            </button>
+                            <button
+                                onClick={() => {
+                                    setShowSettings(false);
+                                    navigate('/settings?section=appearance');
+                                }}
+                                className="w-full text-left px-4 py-2 hover:bg-surface-container-highest dark:hover:bg-gray-800 text-on-surface dark:text-white transition-colors flex items-center gap-2"
+                            >
+                                <span className="material-symbols-outlined text-lg">palette</span>
+                                Appearance
+                            </button>
+                        </div>
+                    )}
+                </div>
 
                 {/* User Menu */}
                 <div className="relative">
                     <button
-                        onClick={() => setShowUserMenu(!showUserMenu)}
+                        onClick={() => {
+                            setShowUserMenu(!showUserMenu);
+                            setShowNotifications(false);
+                            setShowSettings(false);
+                        }}
                         className="flex items-center gap-2 hover:bg-surface-container-highest dark:hover:bg-surface-container-highest rounded-full p-1 transition-colors active:scale-95"
                     >
                         <div className="w-8 h-8 rounded-full bg-surface-container-high dark:bg-surface-container-high overflow-hidden ring-2 ring-surface dark:ring-surface-container">

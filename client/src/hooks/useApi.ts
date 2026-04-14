@@ -1,45 +1,92 @@
 import { useState, useEffect, useRef } from 'react';
-import { API_BASE, CACHE_TTL_MS } from '../constants/api';
+import { CACHE_TTL_MS } from '../constants/api';
+import { buildApiUrl } from '../config/runtimeEndpoints';
 
 // Request cache to prevent duplicate API calls
 const requestCache = new Map<string, { data: any; expiresAt: number }>();
 const requestInFlight = new Map<string, Promise<any>>();
 
+function unwrapApiData<T>(value: T): T {
+    if (value && typeof value === 'object' && 'data' in (value as Record<string, unknown>)) {
+        return (value as Record<string, unknown>).data as T;
+    }
+
+    return value;
+}
+
+function buildCacheKey(endpoint: string, requiresAuth: boolean) {
+    if (!requiresAuth) {
+        return endpoint;
+    }
+
+    const token = localStorage.getItem('token') || 'no-token';
+    return `${endpoint}::auth::${token}`;
+}
+
+async function parseErrorResponse(response: Response, endpoint: string) {
+    let message = `Failed to fetch ${endpoint}`;
+
+    try {
+        const body = await response.json();
+        if (body?.error) {
+            message = body.error;
+        }
+    } catch {
+        // Ignore parse errors and keep fallback message
+    }
+
+    throw new Error(message);
+}
+
 // Generic fetch with caching
-async function fetchWithCache(endpoint: string, forceRefresh = false) {
+async function fetchWithCache(endpoint: string, forceRefresh = false, requiresAuth = false) {
+    const cacheKey = buildCacheKey(endpoint, requiresAuth);
     const now = Date.now();
-    const cached = requestCache.get(endpoint);
+    const cached = requestCache.get(cacheKey);
 
     if (forceRefresh) {
-        requestCache.delete(endpoint);
+        requestCache.delete(cacheKey);
     } else if (cached && cached.expiresAt > now) {
         return cached.data;
     }
 
-    if (requestInFlight.has(endpoint)) {
-        return requestInFlight.get(endpoint);
+    if (requestInFlight.has(cacheKey)) {
+        return requestInFlight.get(cacheKey);
     }
 
     const promise = (async () => {
         try {
-            const response = await fetch(`${API_BASE}${endpoint}`);
-            if (!response.ok) throw new Error(`Failed to fetch ${endpoint}`);
+            const headers: Record<string, string> = {};
+            if (requiresAuth) {
+                const token = localStorage.getItem('token');
+                if (!token) {
+                    throw new Error('Authentication required');
+                }
+                headers.Authorization = `Bearer ${token}`;
+            }
+
+            const url = await buildApiUrl(endpoint);
+            const response = await fetch(url, { headers });
+            if (!response.ok) {
+                await parseErrorResponse(response, endpoint);
+            }
+
             const data = await response.json();
-            requestCache.set(endpoint, {
+            requestCache.set(cacheKey, {
                 data,
                 expiresAt: Date.now() + CACHE_TTL_MS
             });
             return data;
         } finally {
-            requestInFlight.delete(endpoint);
+            requestInFlight.delete(cacheKey);
         }
     })();
 
-    requestInFlight.set(endpoint, promise);
+    requestInFlight.set(cacheKey, promise);
     return promise;
 }
 
-function useCachedResource<T>(endpoint: string | null, deps: any[] = [], initialData: T, enabled = true) {
+function useCachedResource<T>(endpoint: string | null, deps: any[] = [], initialData: T, enabled = true, requiresAuth = false) {
     const [data, setData] = useState<T>(initialData);
     const [loading, setLoading] = useState(Boolean(enabled && endpoint));
     const [error, setError] = useState<string | null>(null);
@@ -50,7 +97,7 @@ function useCachedResource<T>(endpoint: string | null, deps: any[] = [], initial
 
         try {
             setLoading(true);
-            const next = await fetchWithCache(endpoint, forceRefresh);
+            const next = await fetchWithCache(endpoint, forceRefresh, requiresAuth);
             if (isMounted.current) {
                 setData(next as T);
                 setError(null);
@@ -82,7 +129,7 @@ function useCachedResource<T>(endpoint: string | null, deps: any[] = [], initial
 
         (async () => {
             try {
-                const next = await fetchWithCache(endpoint);
+                const next = await fetchWithCache(endpoint, false, requiresAuth);
                 if (isMounted.current) {
                     setData(next as T);
                     setError(null);
@@ -103,40 +150,46 @@ function useCachedResource<T>(endpoint: string | null, deps: any[] = [], initial
             isMounted.current = false;
         };
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [endpoint, enabled, ...deps]);
+    }, [endpoint, enabled, requiresAuth, ...deps]);
 
     return { data, loading, error, refetch };
 }
 
 export function useUsers() {
     const { data, loading, error, refetch } = useCachedResource<any[]>('/users', [], []);
-    return { users: data, loading, error, refetch };
+    const usersArray = Array.isArray(data) ? data : (data as any)?.data || [];
+    return { users: usersArray, loading, error, refetch };
 }
 
 export function useTeams() {
     const { data, loading, error, refetch } = useCachedResource<any[]>('/teams', [], []);
-    return { teams: data, loading, error, refetch };
+    const teamsArray = Array.isArray(data) ? data : (data as any)?.data || [];
+    return { teams: teamsArray, loading, error, refetch };
 }
 
 export function useProjects() {
     const { data, loading, error, refetch } = useCachedResource<any[]>('/projects', [], []);
-    return { projects: data, loading, error, refetch };
+    const projectsArray = Array.isArray(data) ? data : (data as any)?.data || [];
+    return { projects: projectsArray, loading, error, refetch };
 }
 
 export function useBoards(projectId?: string) {
     const endpoint = projectId ? `/projects/${projectId}/boards` : null;
     const { data, loading, error, refetch } = useCachedResource<any[]>(endpoint, [projectId], [], Boolean(projectId));
-    return { boards: data, loading, error, refetch };
+    const boardsArray = Array.isArray(data) ? data : (data as any)?.data || [];
+    return { boards: boardsArray, loading, error, refetch };
 }
 
 export function useTasks() {
     const { data, loading, error, refetch } = useCachedResource<any[]>('/tasks', [], []);
-    return { tasks: data, loading, error, refetch };
+    const tasksArray = Array.isArray(data) ? data : (data as any)?.data || [];
+    return { tasks: tasksArray, loading, error, refetch };
 }
 
 export function useChannels() {
     const { data, loading, error, refetch } = useCachedResource<any[]>('/channels', [], []);
-    return { channels: data, loading, error, refetch };
+    const channelsArray = Array.isArray(data) ? data : (data as any)?.data || [];
+    return { channels: channelsArray, loading, error, refetch };
 }
 
 export function useMessages(channelId?: string, conversationId?: string, options?: { enabled?: boolean }) {
@@ -146,7 +199,7 @@ export function useMessages(channelId?: string, conversationId?: string, options
 
     const endpoint = params.toString() ? `/messages?${params.toString()}` : '/messages';
     const enabled = options?.enabled ?? true;
-    const { data, loading, error, refetch } = useCachedResource<any[]>(endpoint, [channelId, conversationId], [], enabled);
+    const { data, loading, error, refetch } = useCachedResource<any[]>(endpoint, [channelId, conversationId], [], enabled, true);
 
     // Handle both array and paginated object formats
     const messagesArray = Array.isArray(data) ? data : (data as any)?.data || [];
@@ -155,18 +208,21 @@ export function useMessages(channelId?: string, conversationId?: string, options
 
 export function useCalendarEvents() {
     const { data, loading, error, refetch } = useCachedResource<any[]>('/calendar-events', [], []);
-    return { events: data, loading, error, refetch };
+    const eventsArray = Array.isArray(data) ? data : (data as any)?.data || [];
+    return { events: eventsArray, loading, error, refetch };
 }
 
 export function useTimeRecords() {
     const { data, loading, error, refetch } = useCachedResource<any[]>('/time-records', [], []);
-    return { records: data, loading, error, refetch };
+    const recordsArray = Array.isArray(data) ? data : (data as any)?.data || [];
+    return { records: recordsArray, loading, error, refetch };
 }
 
 export function useDocumentation(includeContent = true) {
     const endpoint = includeContent ? '/documentation' : '/documentation?summary=true';
     const { data, loading, error, refetch } = useCachedResource<any[]>(endpoint, [includeContent], []);
-    return { docs: data, loading, error, refetch };
+    const docsArray = Array.isArray(data) ? data : (data as any)?.data || [];
+    return { docs: docsArray, loading, error, refetch };
 }
 
 export function useDocumentationSummaries() {
@@ -176,12 +232,14 @@ export function useDocumentationSummaries() {
 export function useDocumentationById(docId?: string) {
     const endpoint = docId ? `/documentation/${docId}` : null;
     const { data, loading, error } = useCachedResource<any | null>(endpoint, [docId], null, Boolean(docId));
-    return { doc: data, loading, error };
+    const doc = (data as any)?.data ?? data;
+    return { doc, loading, error };
 }
 
 export function useActivities() {
     const { data, loading, error } = useCachedResource<any[]>('/activities', [], []);
-    return { activities: data, loading, error };
+    const activitiesArray = Array.isArray(data) ? data : (data as any)?.data || [];
+    return { activities: activitiesArray, loading, error };
 }
 
 // Optimized hook for TeamPage - fetches users and teams in parallel with caching
@@ -204,8 +262,8 @@ export function useTeamDirectory() {
                 ]);
 
                 if (isMounted.current) {
-                    setUsers(usersData);
-                    setTeams(teamsData);
+                    setUsers(Array.isArray(usersData) ? usersData : usersData?.data || []);
+                    setTeams(Array.isArray(teamsData) ? teamsData : teamsData?.data || []);
                     setError(null);
                 }
             } catch (err) {
@@ -249,10 +307,10 @@ export function useDashboard() {
 
                 if (isMounted.current) {
                     setDashboardData({
-                        projects,
-                        users,
-                        events,
-                        activities
+                        projects: unwrapApiData(projects),
+                        users: unwrapApiData(users),
+                        events: unwrapApiData(events),
+                        activities: unwrapApiData(activities)
                     });
                     setError(null);
                 }

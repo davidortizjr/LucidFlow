@@ -1,38 +1,72 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useChannels, useMessages, useUsers } from "../hooks/useApi";
+import { useMessagesRealtime } from "../hooks/useMessagesRealtime";
 import { useAuth } from "../contexts/AuthContext";
 import type { Channel, Message } from "../types";
 import type { User } from "../types/messages";
-
-function formatRelative(value: string) {
-    const date = new Date(value);
-    return Number.isNaN(date.getTime()) ? "" : date.toLocaleString();
-}
+import {
+    MessageRow,
+    CHAT_SCROLL_NEAR_BOTTOM_PX,
+    buildThreadKey,
+    computeLatestChannelTimestamps,
+    computeLatestDirectTimestamps,
+    dedupeAndSortMessages
+} from "../features/messages";
 
 export default function MessagesPage() {
-    const { user: currentUser } = useAuth();
+    const { user: currentUser, token } = useAuth();
     const [searchParams] = useSearchParams();
     const [activeTab, setActiveTab] = useState<"direct" | "channels">("direct");
     const [selectedChannelId, setSelectedChannelId] = useState<string>("");
     const [selectedUserId, setSelectedUserId] = useState<string>(searchParams.get("directUser") || "");
     const [search, setSearch] = useState("");
-    const isDirectTab = activeTab === "direct";
-    const isChannelsTab = activeTab === "channels";
+    const [draftMessage, setDraftMessage] = useState("");
+    const [sending, setSending] = useState(false);
+    const [conversationMapVersion, setConversationMapVersion] = useState(0);
+    const messagesContainerRef = useRef<HTMLDivElement | null>(null);
+    const previousThreadKeyRef = useRef<string>("");
+    const autoScrolledThreadsRef = useRef(new Set<string>());
 
     const { users, loading: usersLoading, error: usersError } = useUsers();
     const { channels, loading: channelsLoading, error: channelsError } = useChannels();
-    const { messages: directTabMessages, loading: directMessagesLoading, error: directMessagesError } = useMessages(undefined, undefined, { enabled: isDirectTab });
+    const { messages: directTabMessages, loading: directMessagesLoading, error: directMessagesError } = useMessages(undefined, undefined, { enabled: activeTab === "direct" });
     const { messages: channelMessages, loading: channelMessagesLoading, error: channelMessagesError } = useMessages(
         selectedChannelId || undefined,
         undefined,
-        { enabled: isChannelsTab && Boolean(selectedChannelId) }
+        { enabled: activeTab === "channels" && Boolean(selectedChannelId) }
     );
+
+    const {
+        liveMessages,
+        liveError,
+        pendingDirectRecipientRef,
+        directConversationByUserIdRef,
+        sendMessage: sendRealtimeMessage,
+        subscribeToChannel,
+        subscribeToConversation
+    } = useMessagesRealtime({
+        token,
+        currentUserId: currentUser?.id || null
+    });
 
     const typedUsers = users as User[];
     const typedChannels = channels as Channel[];
     const typedDirectTabMessages = directTabMessages as Message[];
     const typedChannelMessages = channelMessages as Message[];
+
+    const mergedDirectBase = useMemo(
+        () => dedupeAndSortMessages([...typedDirectTabMessages, ...liveMessages.filter((message) => !message.channelId)]),
+        [typedDirectTabMessages, liveMessages]
+    );
+
+    const mergedChannelBase = useMemo(
+        () => dedupeAndSortMessages([...typedChannelMessages, ...liveMessages.filter((message) => Boolean(message.channelId))]),
+        [typedChannelMessages, liveMessages]
+    );
+
+    const isDirectTab = activeTab === "direct";
+    const isChannelsTab = activeTab === "channels";
 
     useEffect(() => {
         if (!selectedChannelId && typedChannels.length > 0) {
@@ -50,8 +84,63 @@ export default function MessagesPage() {
     }, [isDirectTab, typedUsers, selectedUserId, currentUser?.id]);
 
     const directMessages = useMemo(
-        () => typedDirectTabMessages.filter((message) => !message.channelId),
-        [typedDirectTabMessages]
+        () => mergedDirectBase.filter((message) => !message.channelId),
+        [mergedDirectBase]
+    );
+
+    // Update direct conversation map from incoming messages
+    useEffect(() => {
+        if (!currentUser?.id) {
+            return;
+        }
+
+        const directMap = directConversationByUserIdRef.current;
+        let mapChanged = false;
+
+        for (const message of directMessages) {
+            if (!message.conversationId) {
+                continue;
+            }
+
+            const participantIds = Array.isArray(message.conversation?.participantIds)
+                ? message.conversation.participantIds.filter((id): id is string => typeof id === "string")
+                : [];
+
+            if (participantIds.length > 0 && participantIds.includes(currentUser.id)) {
+                const otherParticipantId = participantIds.find((id) => id !== currentUser.id);
+                if (otherParticipantId) {
+                    const previousConversationId = directMap.get(otherParticipantId);
+                    if (previousConversationId !== message.conversationId) {
+                        directMap.set(otherParticipantId, message.conversationId);
+                        mapChanged = true;
+                    }
+                    continue;
+                }
+            }
+
+            const authorId = message.user?.id;
+            if (authorId && authorId !== currentUser.id) {
+                const previousConversationId = directMap.get(authorId);
+                if (previousConversationId !== message.conversationId) {
+                    directMap.set(authorId, message.conversationId);
+                    mapChanged = true;
+                }
+            }
+        }
+
+        if (mapChanged) {
+            setConversationMapVersion((previous) => previous + 1);
+        }
+    }, [directMessages, currentUser?.id]);
+
+    const latestDirectMessageTsByUserId = useMemo(
+        () => computeLatestDirectTimestamps(directMessages, currentUser?.id),
+        [directMessages, currentUser?.id]
+    );
+
+    const latestChannelMessageTsByChannelId = useMemo(
+        () => computeLatestChannelTimestamps(mergedChannelBase),
+        [mergedChannelBase]
     );
 
     const selectedUser = useMemo(
@@ -64,84 +153,166 @@ export default function MessagesPage() {
         [selectedChannelId, typedChannels]
     );
 
+    const selectedConversationId = useMemo(() => {
+        if (!selectedUserId) {
+            return undefined;
+        }
+        return directConversationByUserIdRef.current.get(selectedUserId);
+    }, [selectedUserId, directMessages, conversationMapVersion]);
+
     const filteredUsers = useMemo(() => {
         const query = search.trim().toLowerCase();
-        let filtered = typedUsers.filter((user) => {
+        const filtered = typedUsers.filter((user) => {
             if (query && !user.name.toLowerCase().includes(query)) return false;
             return user.id !== currentUser?.id;
         });
 
         filtered.sort((a, b) => {
-            const messagesWithA = directMessages.filter((msg) => msg.user?.id === a.id);
-            const messagesWithB = directMessages.filter((msg) => msg.user?.id === b.id);
-
-            const lastMessageA = messagesWithA[messagesWithA.length - 1]?.createdAt;
-            const lastMessageB = messagesWithB[messagesWithB.length - 1]?.createdAt;
-
-            if (!lastMessageA && !lastMessageB) return 0;
-            if (!lastMessageA) return 1;
-            if (!lastMessageB) return -1;
-
-            return new Date(lastMessageB).getTime() - new Date(lastMessageA).getTime();
+            const lastMessageA = latestDirectMessageTsByUserId.get(a.id) || 0;
+            const lastMessageB = latestDirectMessageTsByUserId.get(b.id) || 0;
+            return lastMessageB - lastMessageA;
         });
 
         return filtered;
-    }, [search, typedUsers, directMessages, currentUser?.id]);
+    }, [search, typedUsers, latestDirectMessageTsByUserId, currentUser?.id]);
 
     const filteredChannels = useMemo(() => {
         const query = search.trim().toLowerCase();
-        let filtered = typedChannels.filter((channel) => {
+        const filtered = typedChannels.filter((channel) => {
             if (query && !channel.name.toLowerCase().includes(query)) return false;
             return true;
         });
 
         // Sort by most recent message in that channel
         filtered.sort((a, b) => {
-            const messagesInA = typedChannelMessages.filter((msg) => msg.channelId === a.id);
-            const messagesInB = typedChannelMessages.filter((msg) => msg.channelId === b.id);
-
-            const lastMessageA = messagesInA[messagesInA.length - 1]?.createdAt;
-            const lastMessageB = messagesInB[messagesInB.length - 1]?.createdAt;
-
-            if (!lastMessageA && !lastMessageB) return 0;
-            if (!lastMessageA) return 1;
-            if (!lastMessageB) return -1;
-
-            return new Date(lastMessageB).getTime() - new Date(lastMessageA).getTime();
+            const lastMessageA = latestChannelMessageTsByChannelId.get(a.id) || 0;
+            const lastMessageB = latestChannelMessageTsByChannelId.get(b.id) || 0;
+            return lastMessageB - lastMessageA;
         });
 
         return filtered;
-    }, [search, typedChannels, typedChannelMessages]);
+    }, [search, typedChannels, latestChannelMessageTsByChannelId]);
 
     const activeMessages = useMemo(
         () => {
             let messages;
 
             if (activeTab === "channels") {
-                messages = typedChannelMessages;
+                messages = mergedChannelBase.filter((message) => message.channelId === selectedChannelId);
             } else {
-                messages = directMessages.filter((message) => message.user?.id === selectedUserId);
+                if (selectedConversationId) {
+                    messages = directMessages.filter((message) => message.conversationId === selectedConversationId);
+                } else {
+                    // While a new direct conversation is being established, include the
+                    // current user's just-sent messages for the selected recipient.
+                    messages = directMessages.filter((message) => {
+                        const authorId = message.user?.id;
+                        if (authorId === selectedUserId) {
+                            return true;
+                        }
+
+                        return (
+                            authorId === currentUser?.id &&
+                            pendingDirectRecipientRef.current === selectedUserId
+                        );
+                    });
+                }
             }
 
             return messages;
         },
-        [activeTab, typedChannelMessages, directMessages, selectedUserId]
+        [activeTab, mergedChannelBase, directMessages, selectedUserId, selectedChannelId, selectedConversationId, currentUser?.id]
     );
+
     const sidebarLoading = usersLoading || channelsLoading;
     const sidebarError = usersError || channelsError;
     const messageLoading = isChannelsTab ? channelMessagesLoading : directMessagesLoading;
-    const messageError = isChannelsTab ? channelMessagesError : directMessagesError;
+    const messageError = liveError || (isChannelsTab ? channelMessagesError : directMessagesError);
 
+    const activeThreadKey = useMemo(
+        () => buildThreadKey(activeTab, selectedChannelId, selectedConversationId, selectedUserId),
+        [activeTab, selectedChannelId, selectedConversationId, selectedUserId]
+    );
+
+    useEffect(() => {
+        if (previousThreadKeyRef.current !== activeThreadKey) {
+            autoScrolledThreadsRef.current.delete(activeThreadKey);
+        }
+
+        if (messageLoading) {
+            return;
+        }
+
+        if (!messagesContainerRef.current) {
+            return;
+        }
+
+        if (
+            previousThreadKeyRef.current !== activeThreadKey ||
+            (!autoScrolledThreadsRef.current.has(activeThreadKey) && activeMessages.length > 0)
+        ) {
+            previousThreadKeyRef.current = activeThreadKey;
+            const container = messagesContainerRef.current;
+            container.scrollTop = container.scrollHeight;
+            autoScrolledThreadsRef.current.add(activeThreadKey);
+        }
+    }, [activeThreadKey, messageLoading, activeMessages.length]);
+
+    useEffect(() => {
+        const container = messagesContainerRef.current;
+        if (!container) {
+            return;
+        }
+
+        const distanceFromBottom = container.scrollHeight - container.scrollTop - container.clientHeight;
+        if (distanceFromBottom <= CHAT_SCROLL_NEAR_BOTTOM_PX) {
+            container.scrollTop = container.scrollHeight;
+        }
+    }, [activeMessages.length]);
+
+    // Subscribe to channels or conversations when they are selected
+    // For direct messaging, also depend on conversationMapVersion to ensure we retry when the map updates
+    useEffect(() => {
+        if (activeTab === "channels" && selectedChannelId) {
+            subscribeToChannel(selectedChannelId);
+        } else if (activeTab === "direct" && selectedConversationId) {
+            subscribeToConversation(selectedConversationId);
+        }
+    }, [activeTab, selectedChannelId, selectedConversationId, conversationMapVersion, subscribeToChannel, subscribeToConversation]);
+
+    async function handleSendMessage() {
+        const content = draftMessage.trim();
+        if (!content || sending) {
+            return;
+        }
+
+        setSending(true);
+
+        try {
+            await sendRealtimeMessage(
+                content,
+                activeTab,
+                selectedChannelId,
+                selectedConversationId,
+                selectedUserId
+            );
+            setDraftMessage("");
+        } finally {
+            setSending(false);
+        }
+    }
     return (
         <main className="md:ml-64 pt-16 min-h-screen bg-background text-on-surface">
-            <div className="px-6 pb-12 pt-8">
-                <header className="mb-8 mt-8">
-                    <h2 className="font-manrope text-5xl font-extrabold text-on-surface tracking-tighter mb-2">Messages</h2>
-                    <p className="text-on-surface-variant max-w-lg leading-relaxed">Stay connected with your team. Messages are loaded from the server in real time.</p>
-                </header>
+            <div className="px-6 pb-8 pt-16">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6 md:h-[calc(100vh-10rem)]">
+                    <div
+                        className="md:col-span-1 md:sticky md:top-24 self-start md:h-[calc(100vh-10rem)] bg-surface-container-lowest rounded-2xl overflow-hidden flex flex-col min-h-0"
+                    >
+                        <div className="p-5 border-b border-outline-variant">
+                            <h2 className="font-manrope text-3xl font-extrabold text-on-surface tracking-tighter mb-1">Messages</h2>
+                            <p className="text-xs text-on-surface-variant leading-relaxed">Stay connected with your team. Messages are loaded from the server in real time.</p>
+                        </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6 h-[600px]">
-                    <div className="md:col-span-1 bg-surface-container-lowest rounded-2xl overflow-hidden flex flex-col">
                         <div className="p-4 border-b border-outline-variant flex gap-0">
                             <button
                                 onClick={() => setActiveTab("direct")}
@@ -174,13 +345,13 @@ export default function MessagesPage() {
                             </div>
                         </div>
 
-                        <div className="flex-1 overflow-y-auto">
+                        <div className="flex-1 min-h-0 overflow-y-auto">
                             {sidebarLoading ? (
                                 <div className="p-4 text-sm text-on-surface-variant">Loading...</div>
                             ) : sidebarError ? (
                                 <div className="p-4 text-sm text-error">{sidebarError}</div>
                             ) : activeTab === "direct" ? (
-                                filteredUsers.filter(user => user.id !== currentUser?.id).map((user) => (
+                                filteredUsers.map((user) => (
                                     <button
                                         key={user.id}
                                         onClick={() => setSelectedUserId(user.id)}
@@ -223,7 +394,9 @@ export default function MessagesPage() {
                         </div>
                     </div>
 
-                    <div className="md:col-span-2 bg-surface-container-lowest rounded-2xl flex flex-col hidden md:flex">
+                    <div
+                        className="md:col-span-2 md:h-[calc(100vh-10rem)] bg-surface-container-lowest rounded-2xl flex flex-col hidden md:flex"
+                    >
                         <div className="p-4 border-b border-outline-variant flex items-center justify-between">
                             <div className="flex items-center gap-3">
                                 {activeTab === "channels" ? (
@@ -252,7 +425,7 @@ export default function MessagesPage() {
                             </div>
                         </div>
 
-                        <div className="flex-1 overflow-y-auto p-4 space-y-4">
+                        <div ref={messagesContainerRef} className="flex-1 overflow-y-auto p-4">
                             {messageLoading ? (
                                 <p className="text-sm text-on-surface-variant">Loading messages...</p>
                             ) : messageError ? (
@@ -260,30 +433,39 @@ export default function MessagesPage() {
                             ) : activeMessages.length === 0 ? (
                                 <p className="text-sm text-on-surface-variant">No messages found.</p>
                             ) : (
-                                activeMessages.map((message) => (
-                                    <div key={message.id} className="flex gap-3">
-                                        <img
-                                            src={message.user?.avatar || "https://api.dicebear.com/7.x/avataaars/svg?seed=User"}
-                                            alt={message.user?.name || "User"}
-                                            className="w-8 h-8 rounded-full object-cover"
+                                activeMessages.map((message, index) => {
+                                    const previousMessage = activeMessages[index - 1];
+                                    return (
+                                        <MessageRow
+                                            key={message.id}
+                                            message={message}
+                                            previousMessage={previousMessage}
+                                            currentUserId={currentUser?.id}
                                         />
-                                        <div className="flex-1 space-y-1">
-                                            <div className="text-xs text-on-surface-variant font-semibold">{message.user?.name || "Unknown"}</div>
-                                            <div className="bg-surface-container p-3 rounded-lg text-sm text-on-surface max-w-lg">{message.content}</div>
-                                            <div className="text-xs text-on-surface-variant">{formatRelative(message.createdAt)}</div>
-                                        </div>
-                                    </div>
-                                ))
+                                    );
+                                })
                             )}
                         </div>
 
                         <div className="p-4 border-t border-outline-variant flex gap-3">
                             <input
                                 type="text"
+                                value={draftMessage}
+                                onChange={(event) => setDraftMessage(event.target.value)}
+                                onKeyDown={(event) => {
+                                    if (event.key === "Enter") {
+                                        event.preventDefault();
+                                        void handleSendMessage();
+                                    }
+                                }}
                                 placeholder="Type your message..."
                                 className="flex-1 bg-surface-container text-on-surface rounded-lg px-4 py-2.5 outline-none text-sm placeholder-on-surface-variant"
                             />
-                            <button className="w-10 h-10 flex items-center justify-center bg-primary text-on-primary rounded-lg opacity-50" disabled>
+                            <button
+                                onClick={() => void handleSendMessage()}
+                                className="w-10 h-10 flex items-center justify-center bg-primary text-on-primary rounded-lg disabled:opacity-50"
+                                disabled={!draftMessage.trim() || sending}
+                            >
                                 <span className="material-symbols-outlined">send</span>
                             </button>
                         </div>

@@ -18,6 +18,9 @@ export type Message = {
     createdAt: string;
     channelId?: string | null;
     conversationId?: string | null;
+    conversation?: {
+        participantIds?: string[];
+    } | null;
     user?: {
         id: string;
         name?: string;

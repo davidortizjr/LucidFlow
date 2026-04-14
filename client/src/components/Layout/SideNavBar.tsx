@@ -1,10 +1,43 @@
 import { NavLink, useNavigate } from "react-router-dom";
 import { useAuth } from "../../contexts/AuthContext";
+import { InviteMemberModal } from "../Modals";
+import { buildApiUrl } from "../../config/runtimeEndpoints";
+import { useState, useEffect } from "react";
 import type { NavItem } from "../../types";
 
 export default function SideNavBar() {
   const navigate = useNavigate();
-  const { logout } = useAuth();
+  const { logout, token } = useAuth();
+  const [showInviteModal, setShowInviteModal] = useState(false);
+  const [teamId, setTeamId] = useState<string>('');
+
+  useEffect(() => {
+    // Fetch the first team to get its ID
+    const fetchTeamId = async () => {
+      try {
+        const url = await buildApiUrl('/teams');
+        const response = await fetch(url, {
+          headers: {
+            Authorization: `Bearer ${token}`
+          }
+        });
+
+        if (response.ok) {
+          const payload = await response.json();
+          const teams = Array.isArray(payload?.data) ? payload.data : [];
+          if (teams.length > 0) {
+            setTeamId(teams[0].id);
+          }
+        }
+      } catch {
+        // Silently fail - teamId will remain empty and modal won't work
+      }
+    };
+
+    if (token) {
+      void fetchTeamId();
+    }
+  }, [token]);
 
   const navItems: NavItem[] = [
     { icon: "dashboard", label: "Dashboard", to: "/" },
@@ -74,8 +107,12 @@ export default function SideNavBar() {
       </nav>
 
       <div className="pt-4 mt-4 border-t border-outline-variant">
-        <button className="w-full flex items-center justify-center gap-2 py-3 bg-gradient-to-r from-primary to-primary-container text-on-primary rounded-xl font-manrope text-sm font-bold shadow-lg shadow-primary/20 hover:scale-[1.02] active:scale-95 transition-all">
-          <span className="material-symbols-outlined text-sm">person_add</span>{" "}
+        <button
+          onClick={() => setShowInviteModal(true)}
+          disabled={!teamId}
+          className="w-full flex items-center justify-center gap-2 py-3 bg-gradient-to-r from-primary to-primary-container text-on-primary rounded-xl font-manrope text-sm font-bold shadow-lg shadow-primary/20 hover:scale-[1.02] active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          <span className="material-symbols-outlined text-sm">person_add</span>
           Invite Member
         </button>
       </div>
@@ -109,6 +146,12 @@ export default function SideNavBar() {
           );
         })}
       </div>
+
+      <InviteMemberModal
+        isOpen={showInviteModal}
+        onClose={() => setShowInviteModal(false)}
+        teamId={teamId}
+      />
     </aside>
   );
 }

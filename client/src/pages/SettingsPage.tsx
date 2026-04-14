@@ -1,10 +1,12 @@
 import { useState, useRef, useEffect } from "react";
+import { useSearchParams } from "react-router-dom";
 import gsap from "gsap";
 import { ScrollToPlugin } from "gsap/ScrollToPlugin";
 
 gsap.registerPlugin(ScrollToPlugin);
 
 export default function SettingsPage() {
+    const [searchParams] = useSearchParams();
     const [notifications, setNotifications] = useState({
         messages: true,
         updates: true,
@@ -134,6 +136,33 @@ export default function SettingsPage() {
 
         document.documentElement.style.setProperty("--sidebar-width", `${appearance.sidebarWidth}px`);
     }, []);
+
+    // Handle scrolling to section from query parameter on mount
+    useEffect(() => {
+        const section = searchParams.get("section") as "notifications" | "privacy" | "account" | "appearance" | null;
+        if (!section) return;
+
+        const refMap = {
+            notifications: notificationsRef,
+            privacy: privacyRef,
+            account: accountRef,
+            appearance: appearanceRef,
+        };
+
+        const ref = refMap[section];
+        if (ref && ref.current && containerRef.current) {
+            setTimeout(() => {
+                gsap.to(window, {
+                    scrollTo: {
+                        y: ref.current!.offsetTop - 100,
+                        autoKill: false,
+                    },
+                    duration: 0.6,
+                    ease: "power2.inOut",
+                });
+            }, 100);
+        }
+    }, [searchParams]);
 
     // Track which section is visible using Intersection Observer
     useEffect(() => {

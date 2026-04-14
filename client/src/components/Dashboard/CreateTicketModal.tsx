@@ -6,6 +6,7 @@ import { FormInput, FormSelect, FormTextarea } from "../Forms";
 import { ErrorState } from "../States";
 import type { User } from "../../types/messages";
 import type { Project } from "../../types";
+import { buildApiUrl } from "../../config/runtimeEndpoints";
 
 interface CreateTicketModalProps {
     isOpen: boolean;
@@ -74,7 +75,8 @@ export default function CreateTicketModal({
         setLoading(true);
 
         try {
-            const response = await fetch("http://localhost:3000/api/tasks", {
+            const tasksUrl = await buildApiUrl('/tasks');
+            const response = await fetch(tasksUrl, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
@@ -89,7 +91,8 @@ export default function CreateTicketModal({
             });
 
             if (!response.ok) {
-                throw new Error("Failed to create ticket");
+                const errorBody = await response.json().catch(() => null);
+                throw new Error(errorBody?.error || errorBody?.message || "Failed to create ticket");
             }
 
             resetForm();

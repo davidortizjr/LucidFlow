@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { TimeRecord, UseTimeTrackerOptions } from "../types";
-import { API_BASE } from "../constants/api";
 import { AUTOSAVE_INTERVAL_MS, SERVER_SYNC_INTERVAL_MS, IDLE_CHECK_INTERVAL_MS, DEFAULT_IDLE_TIMEOUT_MS } from "../constants/timing";
+import { buildApiUrl } from "../config/runtimeEndpoints";
 
 type TrackerStatus = "clocked-out" | "tracking" | "idle";
 
@@ -22,6 +22,11 @@ async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> {
         throw new Error(`Request failed: ${response.status}`);
     }
     return (await response.json()) as T;
+}
+
+async function fetchApiJson<T>(endpoint: string, init?: RequestInit): Promise<T> {
+    const url = await buildApiUrl(endpoint);
+    return fetchJson<T>(url, init);
 }
 
 export function useTimeTracker(options: UseTimeTrackerOptions = {}) {
@@ -54,7 +59,7 @@ export function useTimeTracker(options: UseTimeTrackerOptions = {}) {
             const query = new URLSearchParams();
             if (userId) query.set("userId", userId);
             const endpoint = query.toString() ? `/time-records?${query.toString()}` : "/time-records";
-            const data = await fetchJson<TimeRecord[]>(`${API_BASE}${endpoint}`);
+            const data = await fetchApiJson<TimeRecord[]>(endpoint);
             setRecords(Array.isArray(data) ? data : []);
             setError(null);
             setLastSyncAt(new Date());
@@ -145,7 +150,7 @@ export function useTimeTracker(options: UseTimeTrackerOptions = {}) {
         const autosaveId = window.setInterval(async () => {
             try {
                 const minutes = computeDurationMinutes(activeRecord);
-                await fetchJson<TimeRecord>(`${API_BASE}/time-records/${activeRecord.id}`, {
+                await fetchApiJson<TimeRecord>(`/time-records/${activeRecord.id}`, {
                     method: "PATCH",
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify({ duration: minutes })
@@ -172,7 +177,7 @@ export function useTimeTracker(options: UseTimeTrackerOptions = {}) {
         setSaving(true);
         try {
             const now = new Date();
-            const created = await fetchJson<TimeRecord>(`${API_BASE}/time-records`, {
+            const created = await fetchApiJson<TimeRecord>("/time-records", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
@@ -202,7 +207,7 @@ export function useTimeTracker(options: UseTimeTrackerOptions = {}) {
             const clockOutTime = new Date();
             const duration = computeDurationMinutes(activeRecord, clockOutTime.getTime());
 
-            const updated = await fetchJson<TimeRecord>(`${API_BASE}/time-records/${activeRecord.id}`, {
+            const updated = await fetchApiJson<TimeRecord>(`/time-records/${activeRecord.id}`, {
                 method: "PATCH",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({

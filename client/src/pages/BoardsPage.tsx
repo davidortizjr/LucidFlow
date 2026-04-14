@@ -11,6 +11,7 @@ import {
 } from "@hello-pangea/dnd";
 import { motion } from "framer-motion";
 import type { Project, Task, Board } from "../types";
+import { buildApiUrl } from "../config/runtimeEndpoints";
 
 function priorityClasses(priority?: string) {
     switch ((priority || "").toUpperCase()) {
@@ -74,11 +75,12 @@ export default function BoardsPage() {
         if (!selectedProjectId) return;
         setLoading(true);
         try {
-            const response = await fetch(`http://localhost:3000/api/projects/${selectedProjectId}/boards`);
-            const data = await response.json();
-            setBoards(data);
-        } catch (error) {
-            console.error("Failed to fetch boards:", error);
+            const boardsUrl = await buildApiUrl(`/projects/${selectedProjectId}/boards`);
+            const response = await fetch(boardsUrl);
+            const payload = await response.json();
+            setBoards(Array.isArray(payload) ? payload : payload?.data || []);
+        } catch {
+            setBoards([]);
         } finally {
             setLoading(false);
         }
@@ -150,7 +152,8 @@ export default function BoardsPage() {
         const targetStatus = mapBoardNameToStatus(destinationBoard.name);
 
         try {
-            const response = await fetch(`http://localhost:3000/api/tasks/${draggableId}/move`, {
+            const moveUrl = await buildApiUrl(`/tasks/${draggableId}/move`);
+            const response = await fetch(moveUrl, {
                 method: "PATCH",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
@@ -165,10 +168,10 @@ export default function BoardsPage() {
             if (!response.ok) {
                 throw new Error(`Move request failed: ${response.status}`);
             }
-        } catch (error) {
-            console.error("Move endpoint failed; falling back to direct task update:", error);
+        } catch {
 
-            const fallbackResponse = await fetch(`http://localhost:3000/api/tasks/${draggableId}`, {
+            const taskUrl = await buildApiUrl(`/tasks/${draggableId}`);
+            const fallbackResponse = await fetch(taskUrl, {
                 method: "PATCH",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
@@ -179,7 +182,7 @@ export default function BoardsPage() {
             });
 
             if (!fallbackResponse.ok) {
-                console.error(`Fallback update failed: ${fallbackResponse.status}`);
+                setBoards(boards);
             }
         }
     };

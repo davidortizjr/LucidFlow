@@ -1,0 +1,8 @@
+export const CHAT_PANEL_HEIGHT_PX = 600;
+export const CHAT_SCROLL_NEAR_BOTTOM_PX = 160;
+
+export const RECONNECT_MAX_ATTEMPTS = 5;
+export const RECONNECT_BASE_DELAY_MS = 1000;
+export const RECONNECT_MAX_DELAY_MS = 10_000;
+
+export const MESSAGE_REFETCH_DELAY_MS = 250;
