@@ -1,3 +1,5 @@
+import { sendSuccess } from '../helpers/response.js';
+
 export function getHealth(req, res) {
-    res.json({ status: 'ok', timestamp: new Date() });
+    return sendSuccess(res, { status: 'ok', timestamp: new Date() });
 }

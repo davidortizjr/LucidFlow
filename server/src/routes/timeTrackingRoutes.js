@@ -1,12 +1,13 @@
 import express from 'express';
 import { getTimeRecords, createTimeRecord, updateTimeRecord } from '../controllers/timeTrackingController.js';
+import { bindPrisma } from '../helpers/routeBinding.js';
 
 export function createTimeTrackingRoutes(prisma) {
     const router = express.Router();
 
-    router.get('/', (req, res) => getTimeRecords(req, res, prisma));
-    router.post('/', (req, res) => createTimeRecord(req, res, prisma));
-    router.patch('/:id', (req, res) => updateTimeRecord(req, res, prisma));
+    router.get('/', bindPrisma(getTimeRecords, prisma));
+    router.post('/', bindPrisma(createTimeRecord, prisma));
+    router.patch('/:id', bindPrisma(updateTimeRecord, prisma));
 
     return router;
 }

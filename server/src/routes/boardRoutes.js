@@ -1,10 +1,11 @@
 import express from 'express';
 import { getBoards, moveTask } from '../controllers/boardController.js';
+import { bindPrisma } from '../helpers/routeBinding.js';
 
 export function createBoardRoutes(prisma) {
     const router = express.Router({ mergeParams: true });
 
-    router.get('/', (req, res) => getBoards(req, res, prisma));
+    router.get('/', bindPrisma(getBoards, prisma));
 
     return router;
 }
@@ -12,7 +13,7 @@ export function createBoardRoutes(prisma) {
 export function createTaskMovementRoutes(prisma) {
     const router = express.Router();
 
-    router.patch('/:id/move', (req, res) => moveTask(req, res, prisma));
+    router.patch('/:id/move', bindPrisma(moveTask, prisma));
 
     return router;
 }

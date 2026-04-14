@@ -18,6 +18,7 @@ model User {
   timeRecords   TimeRecord[]
   activityLogs  ActivityLog[]
   documentation CodeDocumentation[]
+  sentInvites   TeamInvite[] @relation("InvitedBy")
 
   @@index([email])
 }

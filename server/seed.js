@@ -17,6 +17,7 @@ async function seed() {
         // Clear existing data in correct order (respecting foreign keys)
         console.log('Clearing existing data...');
         try {
+            await prisma.notification.deleteMany({});
             await prisma.userSettings.deleteMany({});
             await prisma.activityLog.deleteMany({});
             await prisma.codeDocumentation.deleteMany({});
@@ -112,7 +113,7 @@ async function seed() {
                 },
             }),
         ]);
-        console.log('✅ Created 5 users');
+        console.log(' Created 5 users');
 
         // Seed team
         console.log('Seeding team...');
@@ -127,7 +128,7 @@ async function seed() {
                 },
             },
         });
-        console.log('✅ Created 1 team with all users');
+        console.log(' Created 1 team with all users');
 
         // Seed projects
         console.log('Seeding projects...');
@@ -166,7 +167,7 @@ async function seed() {
                 },
             }),
         ]);
-        console.log('✅ Created 3 projects');
+        console.log(' Created 3 projects');
 
         // Seed boards
         console.log('Seeding boards...');
@@ -204,7 +205,7 @@ async function seed() {
                 },
             }),
         ]);
-        console.log('✅ Created 4 boards');
+        console.log(' Created 4 boards');
 
         // Seed tasks
         console.log('Seeding tasks...');
@@ -286,7 +287,7 @@ async function seed() {
                 },
             }),
         ]);
-        console.log('✅ Created 5 tasks');
+        console.log(' Created 5 tasks');
 
         // Seed channels
         console.log('Seeding channels...');
@@ -340,7 +341,7 @@ async function seed() {
                 },
             }),
         ]);
-        console.log('✅ Created 4 channels');
+        console.log(' Created 4 channels');
 
         // Seed conversations for direct messages
         console.log('Seeding conversations...');
@@ -348,17 +349,17 @@ async function seed() {
             prisma.conversation.create({
                 data: {
                     id: 'conv-1',
-                    participantIds: JSON.stringify([users[1].id, users[2].id]),
+                    participantIds: [users[1].id, users[2].id],
                 },
             }),
             prisma.conversation.create({
                 data: {
                     id: 'conv-2',
-                    participantIds: JSON.stringify([users[3].id, users[4].id]),
+                    participantIds: [users[3].id, users[4].id],
                 },
             }),
         ]);
-        console.log('✅ Created 2 conversations');
+        console.log(' Created 2 conversations');
 
         // Seed messages
         console.log('Seeding messages...');
@@ -464,7 +465,7 @@ async function seed() {
                 },
             }),
         ]);
-        console.log('✅ Created 11 messages (6 channel messages + 5 direct messages)');
+        console.log(' Created 11 messages (6 channel messages + 5 direct messages)');
 
         // Seed calendar events
         console.log('Seeding calendar events...');
@@ -514,7 +515,7 @@ async function seed() {
                 },
             }),
         ]);
-        console.log('✅ Created 4 calendar events');
+        console.log(' Created 4 calendar events');
 
         // Seed time records
         console.log('Seeding time records...');
@@ -576,7 +577,7 @@ async function seed() {
                 },
             }),
         ]);
-        console.log('✅ Created 5 time records');
+        console.log(' Created 5 time records');
 
         // Seed code documentation
         console.log('Seeding code documentation...');
@@ -647,7 +648,7 @@ async function seed() {
                 },
             }),
         ]);
-        console.log('✅ Created 5 code documentation entries');
+        console.log(' Created 5 code documentation entries');
 
         // Seed activity logs
         console.log('Seeding activity logs...');
@@ -703,7 +704,7 @@ async function seed() {
                 },
             }),
         ]);
-        console.log('✅ Created 5 activity logs');
+        console.log(' Created 5 activity logs');
 
         // Seed user settings
         console.log('Seeding user settings...');
@@ -764,9 +765,9 @@ async function seed() {
                 },
             }),
         ]);
-        console.log('✅ Created 5 user settings');
+        console.log(' Created 5 user settings');
 
-        console.log('\n✅✅✅ Database seeding completed successfully! ✅✅✅\n');
+        console.log('\n Database seeding completed successfully!\n');
         console.log('Summary:');
         console.log('- 5 Users created');
         console.log('- 1 Team created with all users as members');

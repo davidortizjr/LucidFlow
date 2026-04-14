@@ -47,6 +47,11 @@ enum ActivityType {
   COMMENT_ADDED
 }
 
+enum NotificationType {
+  MESSAGE
+  ACTIVITY
+}
+
 // ==================== USER ====================
 model User {
   id            String    @id @default(cuid())
@@ -68,8 +73,48 @@ model User {
   timeRecords   TimeRecord[]
   activityLogs  ActivityLog[]
   documentation CodeDocumentation[]
+  notifications Notification[]
+  sentInvites   TeamInvite[] @relation("InvitedBy")
 
   @@index([email])
+}
+
+model TeamInvite {
+  id          String    @id @default(cuid())
+  email       String
+  code        String    @unique
+  teamId      String
+  invitedBy   String    // userId of the person who sent the invite
+  status      String    @default("pending") // pending, accepted, expired
+  expiresAt   DateTime
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  team        Team      @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  sender      User      @relation("InvitedBy", fields: [invitedBy], references: [id], onDelete: Cascade)
+
+  @@unique([email, teamId])
+  @@index([email])
+  @@index([code])
+  @@index([teamId])
+  @@index([status])
+}
+
+model Notification {
+  id          String           @id @default(cuid())
+  userId      String
+  type        NotificationType
+  title       String
+  description String
+  isRead      Boolean          @default(false)
+  metadata    Json?
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+
+  user        User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, isRead, createdAt])
+  @@index([createdAt])
 }
 
 // ==================== TEAM & PROJECT ====================
@@ -84,6 +129,7 @@ model Team {
   members     User[]
   projects    Project[]
   channels    Channel[]
+  invites     TeamInvite[]
 
   @@index([name])
 }

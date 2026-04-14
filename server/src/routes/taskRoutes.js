@@ -1,13 +1,14 @@
 import express from 'express';
 import { getTasks, getTaskById, createTask, updateTask } from '../controllers/taskController.js';
+import { bindPrisma } from '../helpers/routeBinding.js';
 
 export function createTaskRoutes(prisma) {
     const router = express.Router();
 
-    router.get('/', (req, res) => getTasks(req, res, prisma));
-    router.get('/:id', (req, res) => getTaskById(req, res, prisma));
-    router.post('/', (req, res) => createTask(req, res, prisma));
-    router.patch('/:id', (req, res) => updateTask(req, res, prisma));
+    router.get('/', bindPrisma(getTasks, prisma));
+    router.get('/:id', bindPrisma(getTaskById, prisma));
+    router.post('/', bindPrisma(createTask, prisma));
+    router.patch('/:id', bindPrisma(updateTask, prisma));
 
     return router;
 }

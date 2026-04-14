@@ -4,10 +4,10 @@ import pkg from '@prisma/client';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { Pool } from 'pg';
 import cors from 'cors';
+import http from 'http';
 
 const { PrismaClient } = pkg;
 
-// Import route factories
 import { createAuthRoutes } from './routes/authRoutes.js';
 import { createUserRoutes } from './routes/userRoutes.js';
 import { createTeamRoutes } from './routes/teamRoutes.js';
@@ -20,89 +20,113 @@ import { createCalendarRoutes } from './routes/calendarRoutes.js';
 import { createTimeTrackingRoutes } from './routes/timeTrackingRoutes.js';
 import { createDocumentationRoutes } from './routes/documentationRoutes.js';
 import { createActivityRoutes } from './routes/activityRoutes.js';
+import { createNotificationRoutes } from './routes/notificationRoutes.js';
 import { createHealthRoutes } from './routes/healthRoutes.js';
+import { arcjetProtect } from './middleware/arcjet.js';
+import { createMessagingWebSocketServer } from './services/websocketServer.js';
+import { createMessageNotifications, createNotificationsFromActivity } from './services/notificationService.js';
 
 const app = express();
+const server = http.createServer(app);
 
-// Initialize database connection with adapter
 const pool = new Pool({
     connectionString: process.env.DATABASE_URL,
 });
 const adapter = new PrismaPg(pool);
 const prisma = new PrismaClient({ adapter });
 
-// Middleware
 app.use(cors());
 app.use(express.json());
+app.use('/api/messages', arcjetProtect);
 
-// ==================== ROUTES ====================
+const messagingWs = createMessagingWebSocketServer({
+    server,
+    prisma,
+    onMessageCreated: (message, context) => createMessageNotifications(prisma, message, context)
+});
 
-// Authentication
 app.use('/api/auth', createAuthRoutes(prisma));
 
-// Users
 app.use('/api/users', createUserRoutes(prisma));
 
-// Teams
-app.use('/api/teams', createTeamRoutes(prisma));
+app.use('/api/teams', createTeamRoutes(prisma, {
+    onActivityCreated: (activity) => createNotificationsFromActivity(prisma, activity)
+}));
 
-// Projects
-app.use('/api/projects', createProjectRoutes(prisma));
+app.use('/api/projects', createProjectRoutes(prisma, {
+    onActivityCreated: (activity) => createNotificationsFromActivity(prisma, activity)
+}));
 
-// Boards (nested under projects)
 app.use('/api/projects/:projectId/boards', createBoardRoutes(prisma));
 
-// Task movement
 app.use('/api/tasks', createTaskMovementRoutes(prisma));
 
-// Tasks
 app.use('/api/tasks', createTaskRoutes(prisma));
 
-// Channels
 app.use('/api/channels', createChannelRoutes(prisma));
 
-// Messages
-app.use('/api/messages', createMessageRoutes(prisma));
+app.use('/api/messages', createMessageRoutes(prisma, {
+    onMessageCreated: async (message, context) => {
+        messagingWs.broadcastMessage(message, context);
+        await createMessageNotifications(prisma, message, context);
+    }
+}));
 
-// Calendar Events
 app.use('/api/calendar-events', createCalendarRoutes(prisma));
 
-// Time Records
 app.use('/api/time-records', createTimeTrackingRoutes(prisma));
 
-// Documentation
 app.use('/api/documentation', createDocumentationRoutes(prisma));
 
-// Activities
 app.use('/api/activities', createActivityRoutes(prisma));
 
-// Health Check
+app.use('/api/notifications', createNotificationRoutes(prisma));
+
 app.use('/api/health', createHealthRoutes());
 
-// ==================== SERVER STARTUP ====================
+const BASE_PORT = Number.parseInt(process.env.PORT || '3000', 10);
+const MAX_PORT_ATTEMPTS = Number.parseInt(process.env.PORT_FALLBACK_ATTEMPTS || '10', 10);
 
-const PORT = process.env.PORT || 3000;
-const server = app.listen(PORT, () => {
-    console.log(`✅ Server is running on port ${PORT}`);
-});
+function startServer(preferredPort, attemptsRemaining) {
+    const onError = (error) => {
+        server.off('error', onError);
 
-// Graceful shutdown
-process.on('SIGTERM', async () => {
-    console.log('SIGTERM received, shutting down gracefully...');
+        if (error.code === 'EADDRINUSE' && attemptsRemaining > 0) {
+            const nextPort = preferredPort + 1;
+            startServer(nextPort, attemptsRemaining - 1);
+            return;
+        }
+
+        process.exit(1);
+    };
+
+    server.once('error', onError);
+    server.listen(preferredPort);
+}
+
+startServer(BASE_PORT, Math.max(0, MAX_PORT_ATTEMPTS));
+
+let shuttingDown = false;
+
+async function shutdown() {
+    if (shuttingDown) {
+        return;
+    }
+
+    shuttingDown = true;
+    messagingWs.shutdown();
+
     server.close(async () => {
         await prisma.$disconnect();
         await pool.end();
-        console.log('Server closed');
         process.exit(0);
     });
+}
+
+process.on('SIGTERM', () => {
+    void shutdown();
 });
 
-process.on('SIGINT', async () => {
-    console.log('SIGINT received, shutting down gracefully...');
-    server.close(async () => {
-        await prisma.$disconnect();
-        await pool.end();
-        console.log('Server closed');
-        process.exit(0);
-    });
+process.on('SIGINT', () => {
+    void shutdown();
 });

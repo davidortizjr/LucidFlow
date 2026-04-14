@@ -1,42 +1,33 @@
+import { sendError, sendSuccess } from '../helpers/response.js';
+import {
+    createTimeRecord as createTimeRecordEntry,
+    listTimeRecords,
+    updateTimeRecord as updateTimeRecordEntry
+} from '../services/timeTrackingService.js';
+
 export async function getTimeRecords(req, res, prisma) {
     try {
-        const { userId, date } = req.query;
-        const where = {};
-        if (userId) where.userId = userId;
-        if (date) where.date = new Date(date);
-
-        const records = await prisma.timeRecord.findMany({
-            where,
-            include: { user: { select: { id: true, name: true } } },
-            orderBy: { date: 'desc' }
-        });
-        res.json(records);
+        const records = await listTimeRecords(prisma, req.query);
+        return sendSuccess(res, records);
     } catch (error) {
-        res.status(500).json({ error: error.message });
+        return sendError(res, error);
     }
 }
 
 export async function createTimeRecord(req, res, prisma) {
     try {
-        const record = await prisma.timeRecord.create({
-            data: req.body,
-            include: { user: true }
-        });
-        res.json(record);
+        const record = await createTimeRecordEntry(prisma, req.body);
+        return sendSuccess(res, record);
     } catch (error) {
-        res.status(500).json({ error: error.message });
+        return sendError(res, error);
     }
 }
 
 export async function updateTimeRecord(req, res, prisma) {
     try {
-        const record = await prisma.timeRecord.update({
-            where: { id: req.params.id },
-            data: req.body,
-            include: { user: true }
-        });
-        res.json(record);
+        const record = await updateTimeRecordEntry(prisma, req.params.id, req.body);
+        return sendSuccess(res, record);
     } catch (error) {
-        res.status(500).json({ error: error.message });
+        return sendError(res, error);
     }
 }

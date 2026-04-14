@@ -1,11 +1,14 @@
 import express from 'express';
-import { getProjects, getProjectById } from '../controllers/projectController.js';
+import { getProjects, getProjectById, createProject } from '../controllers/projectController.js';
+import { authenticateToken } from '../middleware/auth.js';
+import { bindPrisma, bindPrismaWithOptions } from '../helpers/routeBinding.js';
 
-export function createProjectRoutes(prisma) {
+export function createProjectRoutes(prisma, options = {}) {
     const router = express.Router();
 
-    router.get('/', (req, res) => getProjects(req, res, prisma));
-    router.get('/:id', (req, res) => getProjectById(req, res, prisma));
+    router.get('/', bindPrisma(getProjects, prisma));
+    router.get('/:id', bindPrisma(getProjectById, prisma));
+    router.post('/', authenticateToken, bindPrismaWithOptions(createProject, prisma, options));
 
     return router;
 }

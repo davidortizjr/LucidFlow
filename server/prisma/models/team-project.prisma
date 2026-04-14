@@ -9,6 +9,7 @@ model Team {
   members     User[]
   projects    Project[]
   channels    Channel[]
+  invites     TeamInvite[]
 
   @@index([name])
 }

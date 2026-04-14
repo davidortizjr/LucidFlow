@@ -1,31 +1,20 @@
+import { sendError, sendSuccess } from '../helpers/response.js';
+import { getChannelById as findChannelById, listChannels } from '../services/channelService.js';
+
 export async function getChannels(req, res, prisma) {
     try {
-        const channels = await prisma.channel.findMany({
-            select: {
-                id: true,
-                name: true,
-                description: true,
-                members: { select: { id: true } }
-            }
-        });
-        res.json(channels);
+        const channels = await listChannels(prisma);
+        return sendSuccess(res, channels);
     } catch (error) {
-        res.status(500).json({ error: error.message });
+        return sendError(res, error);
     }
 }
 
 export async function getChannelById(req, res, prisma) {
     try {
-        const channel = await prisma.channel.findUnique({
-            where: { id: req.params.id },
-            include: {
-                team: true,
-                members: { select: { id: true, name: true, avatar: true } },
-                messages: { include: { user: true }, orderBy: { createdAt: 'desc' }, take: 50 }
-            }
-        });
-        res.json(channel);
+        const channel = await findChannelById(prisma, req.params.id);
+        return sendSuccess(res, channel);
     } catch (error) {
-        res.status(500).json({ error: error.message });
+        return sendError(res, error);
     }
 }

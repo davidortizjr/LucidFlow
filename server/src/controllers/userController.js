@@ -1,22 +1,20 @@
+import { sendError, sendSuccess } from '../helpers/response.js';
+import { getUserById as findUserById, listUsers } from '../services/userService.js';
+
 export async function getUsers(req, res, prisma) {
     try {
-        const users = await prisma.user.findMany({
-            select: { id: true, email: true, name: true, avatar: true, role: true, status: true }
-        });
-        res.json(users);
+        const users = await listUsers(prisma);
+        return sendSuccess(res, users);
     } catch (error) {
-        res.status(500).json({ error: error.message });
+        return sendError(res, error);
     }
 }
 
 export async function getUserById(req, res, prisma) {
     try {
-        const user = await prisma.user.findUnique({
-            where: { id: req.params.id },
-            include: { teams: true, tasks: true }
-        });
-        res.json(user);
+        const user = await findUserById(prisma, req.params.id);
+        return sendSuccess(res, user);
     } catch (error) {
-        res.status(500).json({ error: error.message });
+        return sendError(res, error);
     }
 }
