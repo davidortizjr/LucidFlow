@@ -24,6 +24,13 @@ function secondsToLabel(totalSeconds: number) {
     return `${pad(hours)}:${pad(minutes)}:${pad(seconds)}`;
 }
 
+function formatTimeValue(value?: string | Date | null) {
+    if (!value) return "—";
+
+    const date = new Date(value);
+    return Number.isNaN(date.getTime()) ? "—" : date.toLocaleTimeString();
+}
+
 function computeMinutes(record: TimeRecord) {
     if (typeof record.duration === "number") return record.duration;
     const inTime = new Date(record.clockInTime).getTime();
@@ -159,7 +166,7 @@ export default function TimeInOutPage() {
                                     <div>
                                         <p className="text-on-primary/80 text-xs font-semibold uppercase tracking-wider">Clock In</p>
                                         <p className="text-lg font-semibold mt-1">
-                                            {activeRecord ? new Date(activeRecord.clockInTime).toLocaleTimeString() : "—"}
+                                            {formatTimeValue(activeRecord?.clockInTime)}
                                         </p>
                                     </div>
                                     <div>
@@ -216,7 +223,7 @@ export default function TimeInOutPage() {
                                                     <div>
                                                         <p className="font-semibold text-on-surface">{new Date(record.date).toLocaleDateString()}</p>
                                                         <p className="text-xs text-on-surface-variant mt-1">
-                                                            {new Date(record.clockInTime).toLocaleTimeString()} - {record.clockOutTime ? new Date(record.clockOutTime).toLocaleTimeString() : "Still working"}
+                                                            {formatTimeValue(record.clockInTime)} - {record.clockOutTime ? formatTimeValue(record.clockOutTime) : "Still working"}
                                                         </p>
                                                         <p className="text-xs text-on-surface-variant mt-1">{record.user?.name || "Unknown user"}</p>
                                                     </div>

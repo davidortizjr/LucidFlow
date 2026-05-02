@@ -97,7 +97,7 @@ export default function InviteMemberModal({
                             Send an invitation to someone to join your team. They'll receive a code to complete their signup.
                         </p>
 
-                        {error && <ErrorState message={error} />}
+                        {error && <ErrorState error={error} />}
 
                         <form onSubmit={handleSubmit} className="space-y-4">
                             <FormInput

@@ -1,4 +1,5 @@
 import { requireAuthUserId, requireFields, sendError, sendSuccess } from '../helpers/response.js';
+import { sendInviteEmail } from '../utils/sendInviteEmail.js';
 import {
     createTeamInvite as createInvite,
     getTeamInvites,
@@ -21,8 +22,12 @@ export async function inviteTeamMember(req, res, prisma) {
             invitedBy: authenticatedUserId
         });
 
-        // TODO: Send invitation email with code to invited email address
-        // For now, we'll just return the code in the response
+        try {
+            await sendInviteEmail(invite.email, invite.code);
+        } catch (emailError) {
+            console.error('Failed to send invite email:', emailError);
+        }
+
         return sendSuccess(res, {
             id: invite.id,
             email: invite.email,

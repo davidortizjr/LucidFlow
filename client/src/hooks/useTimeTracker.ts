@@ -29,6 +29,14 @@ async function fetchApiJson<T>(endpoint: string, init?: RequestInit): Promise<T>
     return fetchJson<T>(url, init);
 }
 
+function unwrapApiData<T>(value: T): T {
+    if (value && typeof value === "object" && "data" in (value as Record<string, unknown>)) {
+        return (value as Record<string, unknown>).data as T;
+    }
+
+    return value;
+}
+
 export function useTimeTracker(options: UseTimeTrackerOptions = {}) {
     const { userId = "user-1", idleTimeoutMs = DEFAULT_IDLE_TIMEOUT_MS, onTimerChange } = options;
 
@@ -59,8 +67,9 @@ export function useTimeTracker(options: UseTimeTrackerOptions = {}) {
             const query = new URLSearchParams();
             if (userId) query.set("userId", userId);
             const endpoint = query.toString() ? `/time-records?${query.toString()}` : "/time-records";
-            const data = await fetchApiJson<TimeRecord[]>(endpoint);
-            setRecords(Array.isArray(data) ? data : []);
+            const data = await fetchApiJson<TimeRecord[] | { data?: TimeRecord[] }>(endpoint);
+            const recordsData = unwrapApiData(data);
+            setRecords(Array.isArray(recordsData) ? recordsData : []);
             setError(null);
             setLastSyncAt(new Date());
         } catch (err) {
@@ -188,7 +197,9 @@ export function useTimeTracker(options: UseTimeTrackerOptions = {}) {
                 })
             });
 
-            setRecords((prev) => [created, ...prev]);
+            const createdRecord = unwrapApiData(created);
+
+            setRecords((prev) => [createdRecord, ...prev]);
             setStatus("tracking");
             setError(null);
             lastActivityAtRef.current = Date.now();
@@ -216,7 +227,9 @@ export function useTimeTracker(options: UseTimeTrackerOptions = {}) {
                 })
             });
 
-            setRecords((prev) => prev.map((record) => (record.id === updated.id ? updated : record)));
+            const updatedRecord = unwrapApiData(updated);
+
+            setRecords((prev) => prev.map((record) => (record.id === updatedRecord.id ? updatedRecord : record)));
             setStatus("clocked-out");
             setIsIdle(false);
             setError(null);

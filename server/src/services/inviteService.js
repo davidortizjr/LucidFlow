@@ -19,6 +19,11 @@ function isValidEmail(email) {
  * Create a team invite
  */
 export async function createTeamInvite(prisma, { email, teamId, invitedBy }) {
+
+    if (!prisma) {
+        throw new Error('Prisma client is undefined!');
+    }
+
     if (!email || !teamId || !invitedBy) {
         throw new HttpError(400, 'Email, teamId, and invitedBy are required');
     }
