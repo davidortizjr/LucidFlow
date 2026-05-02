@@ -39,6 +39,7 @@ export default function MessagesPage() {
 
     const {
         liveMessages,
+        pendingMessages,
         liveError,
         pendingDirectRecipientRef,
         directConversationByUserIdRef,
@@ -219,9 +220,19 @@ export default function MessagesPage() {
                 }
             }
 
-            return messages;
+            // Add pending messages for current thread
+            const allMessages = [...messages];
+            for (const pendingMsg of pendingMessages.values()) {
+                if (activeTab === "channels" && pendingMsg.channelId === selectedChannelId) {
+                    allMessages.push(pendingMsg);
+                } else if (activeTab === "direct" && pendingMsg.conversationId === selectedConversationId) {
+                    allMessages.push(pendingMsg);
+                }
+            }
+
+            return allMessages.sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
         },
-        [activeTab, mergedChannelBase, directMessages, selectedUserId, selectedChannelId, selectedConversationId, currentUser?.id]
+        [activeTab, mergedChannelBase, directMessages, selectedUserId, selectedChannelId, selectedConversationId, currentUser?.id, pendingMessages]
     );
 
     const sidebarLoading = usersLoading || channelsLoading;
@@ -435,12 +446,17 @@ export default function MessagesPage() {
                             ) : (
                                 activeMessages.map((message, index) => {
                                     const previousMessage = activeMessages[index - 1];
+                                    const nextMessage = activeMessages[index + 1];
+                                    const isOwnMessage = message.user?.id === currentUser?.id;
+                                    const isLastConsecutiveOwn = isOwnMessage && (!nextMessage || nextMessage.user?.id !== currentUser?.id);
+
                                     return (
                                         <MessageRow
                                             key={message.id}
                                             message={message}
                                             previousMessage={previousMessage}
                                             currentUserId={currentUser?.id}
+                                            showDelivered={isLastConsecutiveOwn}
                                         />
                                     );
                                 })

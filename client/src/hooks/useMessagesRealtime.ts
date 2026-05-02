@@ -15,6 +15,7 @@ interface UseMessagesRealtimeOptions {
 interface UseMessagesRealtimeReturn {
     socket: WebSocket | null;
     liveMessages: Message[];
+    pendingMessages: Map<string, Message>; // Temporary client messages
     liveError: string | null;
     socketReadyAt: number;
     conversationMapVersion: number;
@@ -36,6 +37,7 @@ export function useMessagesRealtime(
 ): UseMessagesRealtimeReturn {
     const { token, currentUserId } = options;
     const [liveMessages, setLiveMessages] = useState<Message[]>([]);
+    const [pendingMessages, setPendingMessages] = useState<Map<string, Message>>(new Map());
     const [liveError, setLiveError] = useState<string | null>(null);
     const [socketReadyAt, setSocketReadyAt] = useState(0);
     const [conversationMapVersion, setConversationMapVersion] = useState(0);
@@ -46,6 +48,7 @@ export function useMessagesRealtime(
     const shouldReconnectRef = useRef(true);
     const pendingDirectRecipientRef = useRef<string | null>(null);
     const directConversationByUserIdRef = useRef(new Map<string, string>());
+    const messageIdMapRef = useRef(new Map<string, string>()); // Map tempId -> serverId
     const currentUserRef = useRef(currentUserId);
 
     useEffect(() => {
@@ -92,12 +95,40 @@ export function useMessagesRealtime(
                         }
 
                         const nextMessage = payload.data as Message;
+                        nextMessage._status = 'delivered';
                         setLiveMessages((prev) => {
                             if (prev.some((message) => message.id === nextMessage.id)) {
                                 return prev;
                             }
                             return [...prev, nextMessage];
                         });
+
+                        // Remove pending message when server confirms delivery
+                        if (nextMessage.user?.id === currentUserRef.current) {
+                            setPendingMessages((prev) => {
+                                const next = new Map(prev);
+
+                                // Match pending message by content and proximity to sent time
+                                for (const [tempId, pendingMsg] of next.entries()) {
+                                    if (
+                                        pendingMsg.content === nextMessage.content &&
+                                        pendingMsg.channelId === nextMessage.channelId &&
+                                        pendingMsg.conversationId === nextMessage.conversationId
+                                    ) {
+                                        // Check timestamp is within 5 seconds (account for processing delay)
+                                        const pendingTime = new Date(pendingMsg.createdAt).getTime();
+                                        const confirmedTime = new Date(nextMessage.createdAt).getTime();
+                                        if (Math.abs(confirmedTime - pendingTime) < 5000) {
+                                            // Remove from pending so only server message shows
+                                            next.delete(tempId);
+                                            break;
+                                        }
+                                    }
+                                }
+
+                                return next;
+                            });
+                        }
 
                         const pendingRecipient = pendingDirectRecipientRef.current;
                         if (
@@ -242,7 +273,30 @@ export function useMessagesRealtime(
 
         const payload = await response.json();
         const created = (payload?.data ?? payload) as Message;
+        created._status = 'delivered';
+
         setLiveMessages((prev) => (prev.some((message) => message.id === created.id) ? prev : [...prev, created]));
+
+        // Remove pending message when HTTP confirms delivery
+        setPendingMessages((prev) => {
+            const next = new Map(prev);
+            for (const [tempId, pendingMsg] of next.entries()) {
+                if (
+                    pendingMsg.content === created.content &&
+                    pendingMsg.channelId === created.channelId &&
+                    pendingMsg.conversationId === created.conversationId
+                ) {
+                    const pendingTime = new Date(pendingMsg.createdAt).getTime();
+                    const confirmedTime = new Date(created.createdAt).getTime();
+                    if (Math.abs(confirmedTime - pendingTime) < 5000) {
+                        // Remove from pending so only server message shows
+                        next.delete(tempId);
+                        break;
+                    }
+                }
+            }
+            return next;
+        });
     }
 
     async function sendMessage(
@@ -257,6 +311,22 @@ export function useMessagesRealtime(
         }
 
         setLiveError(null);
+
+        // Add optimistic message immediately
+        const tempId = `temp-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+        const optimisticMessage: Message = {
+            id: tempId,
+            _tempId: tempId,
+            content: content.trim(),
+            type: 'TEXT',
+            userId: currentUserRef.current || '',
+            channelId: tab === 'channels' ? selectedChannelId : null,
+            conversationId: selectedConversationId || undefined,
+            createdAt: new Date().toISOString(),
+            user: { id: currentUserRef.current || '', name: 'You', avatar: '' },
+            _status: 'sending'
+        };
+        setPendingMessages((prev) => new Map(prev).set(tempId, optimisticMessage));
 
         try {
             const socket = socketRef.current;
@@ -292,6 +362,12 @@ export function useMessagesRealtime(
                 }
             }
         } catch (error) {
+            // Remove pending message on error
+            setPendingMessages((prev) => {
+                const next = new Map(prev);
+                next.delete(tempId);
+                return next;
+            });
             const errorMessage = error instanceof Error ? error.message : "Unable to send message";
             setLiveError(errorMessage);
             throw error;
@@ -302,6 +378,7 @@ export function useMessagesRealtime(
         () => ({
             socket: socketRef.current,
             liveMessages,
+            pendingMessages,
             liveError,
             socketReadyAt,
             conversationMapVersion,
@@ -311,6 +388,6 @@ export function useMessagesRealtime(
             subscribeToChannel,
             subscribeToConversation
         }),
-        [liveMessages, liveError, socketReadyAt, conversationMapVersion]
+        [liveMessages, pendingMessages, liveError, socketReadyAt, conversationMapVersion]
     );
 }

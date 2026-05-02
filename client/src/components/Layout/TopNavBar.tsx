@@ -113,6 +113,43 @@ export default function TopNavBar() {
         }
     };
 
+    const handleNotificationClick = async (notification: Notification) => {
+        // Mark as read and navigate
+        await markAsRead(notification.id);
+        setShowNotifications(false);
+
+        // Navigate based on notification type
+        const metadata = notification.metadata as Record<string, unknown> | null | undefined;
+
+        if (notification.type === 'MESSAGE') {
+            // Check if it's a channel message or direct message
+            const channelId = metadata?.channelId as string;
+            const senderId = metadata?.senderId as string;
+
+            if (channelId) {
+                // Channel message - navigate to messages (channel will be selected by ID if needed)
+                navigate('/messages');
+            } else if (senderId) {
+                // Direct message - navigate to messages with the sender's user ID
+                navigate(`/messages?directUser=${senderId}`);
+            } else {
+                navigate('/messages');
+            }
+        } else if (notification.type === 'ACTIVITY') {
+            // Navigate to relevant activity page based on activity type
+            const activityType = metadata?.type as string;
+            const projectId = metadata?.projectId as string;
+
+            if (activityType === 'USER_JOINED' || activityType === 'PROJECT_CREATED') {
+                // Navigate to team for team activities
+                navigate('/team');
+            } else {
+                // Default to dashboard for other activities
+                navigate('/dashboard');
+            }
+        }
+    };
+
     const markAllAsRead = async () => {
         if (!token) {
             return;
@@ -204,7 +241,7 @@ export default function TopNavBar() {
                                     notifications.map(notification => (
                                         <button
                                             key={notification.id}
-                                            onClick={() => void markAsRead(notification.id)}
+                                            onClick={() => void handleNotificationClick(notification)}
                                             className={`w-full px-4 py-3 border-b border-surface-container-highest dark:border-gray-700 hover:bg-surface-container-highest dark:hover:bg-gray-800 transition-colors text-left flex gap-3 ${!notification.isRead ? 'bg-primary/5 dark:bg-primary/5' : ''
                                                 }`}
                                         >

@@ -26,6 +26,9 @@ export type Message = {
         name?: string;
         avatar?: string;
     };
+    // Optimistic rendering state
+    _status?: 'sending' | 'sent' | 'delivered';
+    _tempId?: string; // Temporary ID for pending messages
 };
 
 export type Conversation = {
