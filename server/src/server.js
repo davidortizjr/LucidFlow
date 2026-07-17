@@ -23,8 +23,10 @@ import { createActivityRoutes } from './routes/activityRoutes.js';
 import { createNotificationRoutes } from './routes/notificationRoutes.js';
 import { createHealthRoutes } from './routes/healthRoutes.js';
 import { arcjetProtect } from './middleware/arcjet.js';
+import { sanitizeRequestInput } from './middleware/inputSanitizer.js';
 import { createMessagingWebSocketServer } from './services/websocketServer.js';
 import { createMessageNotifications, createNotificationsFromActivity } from './services/notificationService.js';
+import { HttpError, sendError } from './helpers/response.js';
 
 const app = express();
 const server = http.createServer(app);
@@ -36,7 +38,9 @@ const adapter = new PrismaPg(pool);
 const prisma = new PrismaClient({ adapter });
 
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: '100kb' }));
+app.use(express.urlencoded({ extended: false, limit: '100kb' }));
+app.use(sanitizeRequestInput);
 app.use('/api/messages', arcjetProtect);
 
 const messagingWs = createMessagingWebSocketServer({
@@ -83,6 +87,22 @@ app.use('/api/activities', createActivityRoutes(prisma));
 app.use('/api/notifications', createNotificationRoutes(prisma));
 
 app.use('/api/health', createHealthRoutes());
+
+app.use((error, req, res, next) => {
+    if (error?.type === 'entity.too.large') {
+        return sendError(res, new HttpError('Request body is too large', 413, 'PAYLOAD_TOO_LARGE'));
+    }
+
+    if (error instanceof SyntaxError && error.status === 400 && 'body' in error) {
+        return sendError(res, new HttpError('Malformed request body', 400, 'MALFORMED_REQUEST'));
+    }
+
+    return next(error);
+});
+
+app.use((error, req, res, next) => {
+    return sendError(res, error);
+});
 
 const BASE_PORT = Number.parseInt(process.env.PORT || '3000', 10);
 const MAX_PORT_ATTEMPTS = Number.parseInt(process.env.PORT_FALLBACK_ATTEMPTS || '10', 10);
