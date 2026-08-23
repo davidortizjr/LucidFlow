@@ -50,7 +50,7 @@ async function isApiHealthy(baseUrl: string) {
     return response.ok;
 }
 
-export async function resolveApiBaseUrl() {
+export async function resolveApiBaseUrl(): Promise<string> {
     if (resolvedApiBaseUrl) {
         return resolvedApiBaseUrl;
     }
@@ -71,24 +71,42 @@ export async function resolveApiBaseUrl() {
                 }
             }
 
-            resolvedApiBaseUrl = API_BASE_URL;
+            // Fallback to configured API_BASE_URL; ensure it's a string
+            resolvedApiBaseUrl = API_BASE_URL ?? 'http://localhost:3000';
             return resolvedApiBaseUrl;
         })();
     }
 
-    return resolvingPromise;
+    return resolvingPromise!;
 }
 
 export async function buildApiUrl(endpoint: string) {
     const baseUrl = await resolveApiBaseUrl();
-    return `${baseUrl}/api${endpoint}`;
+
+    if (!baseUrl) {
+        throw new Error('No API base URL resolved');
+    }
+
+    const trimmedBase = baseUrl.replace(/\/$/, '');
+
+    // If the endpoint already contains the `/api` prefix, don't add it again
+    if (/^\/?api(\/|$)/i.test(endpoint.replace(/^\//, ''))) {
+        return `${trimmedBase}${endpoint.startsWith('/') ? endpoint : '/' + endpoint}`;
+    }
+
+    const ep = endpoint.startsWith('/') ? endpoint : '/' + endpoint;
+    return `${trimmedBase}/api${ep}`;
 }
 
 export async function resolveWsBaseUrl() {
     if (import.meta.env.VITE_WS_BASE_URL) {
-        return WS_BASE_URL;
+        return import.meta.env.VITE_WS_BASE_URL as string;
     }
 
     const apiBase = await resolveApiBaseUrl();
+    if (!apiBase) {
+        throw new Error('No API base URL resolved for WS');
+    }
+
     return apiBase.replace(/^http/i, 'ws');
 }

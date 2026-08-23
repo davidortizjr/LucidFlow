@@ -39,6 +39,7 @@ export default function LoginPage() {
             const { user, token } = payload;
 
             login(user, token);
+            setIsLoading(false);
 
             navigate('/');
         } catch (err) {
