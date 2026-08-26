@@ -1,5 +1,6 @@
 ﻿import { useMemo, useState } from "react";
 import { useTimeTracker } from "../hooks/useTimeTracker";
+import { useAuth } from "../contexts/AuthContext";
 import type { TimeRecord } from "../types";
 
 const filters = [
@@ -40,8 +41,8 @@ function computeMinutes(record: TimeRecord) {
 
 export default function TimeInOutPage() {
     const [selectedRange, setSelectedRange] = useState<TimeFilter>("today");
+    const { user } = useAuth();
 
-    // Ready for Electron later: hook includes optional IPC idle input if window.electron.ipcRenderer exists.
     const {
         records,
         activeRecord,
@@ -55,7 +56,7 @@ export default function TimeInOutPage() {
         clockIn,
         clockOut,
         refresh
-    } = useTimeTracker({ userId: "user-1" });
+    } = useTimeTracker({ userId: user?.id });
 
     const typedRecords = records as TimeRecord[];
     const now = new Date();

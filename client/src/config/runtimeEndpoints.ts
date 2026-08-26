@@ -1,4 +1,4 @@
-import { API_BASE_URL, WS_BASE_URL } from '../constants/api';
+import { API_BASE_URL } from '../constants/api';
 
 const DEFAULT_BACKEND_PORTS = [3000, 3001, 3002, 3003, 3004, 3005];
 const PROBE_TIMEOUT_MS = 1200;
@@ -50,7 +50,7 @@ async function isApiHealthy(baseUrl: string) {
     return response.ok;
 }
 
-export async function resolveApiBaseUrl(): Promise<string> {
+export async function resolveApiBaseUrl() {
     if (resolvedApiBaseUrl) {
         return resolvedApiBaseUrl;
     }
@@ -71,13 +71,12 @@ export async function resolveApiBaseUrl(): Promise<string> {
                 }
             }
 
-            // Fallback to configured API_BASE_URL; ensure it's a string
-            resolvedApiBaseUrl = API_BASE_URL ?? 'http://localhost:3000';
-            return resolvedApiBaseUrl;
+            resolvedApiBaseUrl = API_BASE_URL;
+            return API_BASE_URL;   // was: return resolvedApiBaseUrl;
         })();
     }
 
-    return resolvingPromise!;
+    return resolvingPromise;
 }
 
 export async function buildApiUrl(endpoint: string) {

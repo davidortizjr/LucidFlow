@@ -89,6 +89,7 @@ function createWindow() {
 app.on('ready', () => {
     console.log('App ready event fired');
     startServer();
+    createWindow();
 });
 
 app.on('window-all-closed', () => {

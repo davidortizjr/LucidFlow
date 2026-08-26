@@ -48,7 +48,6 @@ export function useMessagesRealtime(
     const shouldReconnectRef = useRef(true);
     const pendingDirectRecipientRef = useRef<string | null>(null);
     const directConversationByUserIdRef = useRef(new Map<string, string>());
-    const messageIdMapRef = useRef(new Map<string, string>()); // Map tempId -> serverId
     const currentUserRef = useRef(currentUserId);
 
     useEffect(() => {
@@ -318,8 +317,6 @@ export function useMessagesRealtime(
             id: tempId,
             _tempId: tempId,
             content: content.trim(),
-            type: 'TEXT',
-            userId: currentUserRef.current || '',
             channelId: tab === 'channels' ? selectedChannelId : null,
             conversationId: selectedConversationId || undefined,
             createdAt: new Date().toISOString(),

@@ -38,7 +38,7 @@ function unwrapApiData<T>(value: T): T {
 }
 
 export function useTimeTracker(options: UseTimeTrackerOptions = {}) {
-    const { userId = "user-1", idleTimeoutMs = DEFAULT_IDLE_TIMEOUT_MS, onTimerChange } = options;
+    const { userId, idleTimeoutMs = DEFAULT_IDLE_TIMEOUT_MS, onTimerChange } = options;
 
     const [records, setRecords] = useState<TimeRecord[]>([]);
     const [loading, setLoading] = useState(true);
@@ -181,7 +181,7 @@ export function useTimeTracker(options: UseTimeTrackerOptions = {}) {
     }, [loadRecords]);
 
     const clockIn = useCallback(async () => {
-        if (activeRecord || saving) return;
+        if (!userId || activeRecord || saving) return;
 
         setSaving(true);
         try {

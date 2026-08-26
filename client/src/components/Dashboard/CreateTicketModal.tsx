@@ -86,7 +86,7 @@ export default function CreateTicketModal({
                     status,
                     dueDate: dueDate || undefined,
                     projectId,
-                    assignedTo: assignedTo || undefined,
+                    assignedToId: assignedTo || undefined,   // was: assignedTo
                 }),
             });
 

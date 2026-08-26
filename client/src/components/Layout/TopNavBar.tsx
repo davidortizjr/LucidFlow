@@ -138,14 +138,12 @@ export default function TopNavBar() {
         } else if (notification.type === 'ACTIVITY') {
             // Navigate to relevant activity page based on activity type
             const activityType = metadata?.type as string;
-            const projectId = metadata?.projectId as string;
 
             if (activityType === 'USER_JOINED' || activityType === 'PROJECT_CREATED') {
-                // Navigate to team for team activities
                 navigate('/team');
             } else {
                 // Default to dashboard for other activities
-                navigate('/dashboard');
+                navigate('/');
             }
         }
     };

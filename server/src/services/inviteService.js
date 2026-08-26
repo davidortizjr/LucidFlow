@@ -25,17 +25,17 @@ export async function createTeamInvite(prisma, { email, teamId, invitedBy }) {
     }
 
     if (!email || !teamId || !invitedBy) {
-        throw new HttpError(400, 'Email, teamId, and invitedBy are required');
+        throw new HttpError('Email, teamId, and invitedBy are required', 400, 'VALIDATION_ERROR');
     }
 
     if (!isValidEmail(email)) {
-        throw new HttpError(400, 'Invalid email format');
+        throw new HttpError('Invalid email format', 400, 'VALIDATION_ERROR');
     }
 
     // Check if team exists
     const team = await prisma.team.findUnique({ where: { id: teamId } });
     if (!team) {
-        throw new HttpError(404, 'Team not found');
+        throw new HttpError('Team not found', 404, 'NOT_FOUND');
     }
 
     // Check if user is already a team member
@@ -45,7 +45,7 @@ export async function createTeamInvite(prisma, { email, teamId, invitedBy }) {
     });
 
     if (existingMember?.members.length > 0) {
-        throw new HttpError(409, 'User is already a team member');
+        throw new HttpError('User is already a team member', 409, 'CONFLICT');
     }
 
     // Check if an active invite already exists
@@ -59,7 +59,7 @@ export async function createTeamInvite(prisma, { email, teamId, invitedBy }) {
     });
 
     if (existingInvite) {
-        throw new HttpError(409, 'An active invite already exists for this email');
+        throw new HttpError('An active invite already exists for this email', 409, 'CONFLICT');
     }
 
     // Generate invite code
@@ -116,15 +116,15 @@ export async function getInviteByCode(prisma, code) {
     });
 
     if (!invite) {
-        throw new HttpError(404, 'Invite not found');
+        throw new HttpError('Invite not found', 404, 'NOT_FOUND');
     }
 
     if (invite.status !== 'pending') {
-        throw new HttpError(410, 'This invite has already been used or is no longer valid');
+        throw new HttpError('This invite has already been used or is no longer valid', 410, 'INVITE_INVALID');
     }
 
     if (new Date() > invite.expiresAt) {
-        throw new HttpError(410, 'This invite has expired');
+        throw new HttpError('This invite has expired', 410, 'INVITE_EXPIRED');
     }
 
     return invite;
@@ -136,14 +136,13 @@ export async function getInviteByCode(prisma, code) {
 export async function acceptTeamInvite(prisma, { code, userId }) {
     const invite = await getInviteByCode(prisma, code);
 
-    // Check if the user already exists in the team
     const existingMember = await prisma.team.findUnique({
         where: { id: invite.teamId },
         include: { members: { where: { id: userId } } }
     });
 
     if (existingMember?.members.length > 0) {
-        throw new HttpError(409, 'User is already a team member');
+        throw new HttpError('User is already a team member', 409, 'CONFLICT');
     }
 
     // Add user to team
